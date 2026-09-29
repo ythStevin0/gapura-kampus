@@ -48,3 +48,23 @@ func (s *Service) CreateMataKuliah(ctx context.Context, mk *model.MataKuliah) er
 func (s *Service) GetAllMataKuliah(ctx context.Context) ([]model.MataKuliah, error) {
 	return s.repo.GetAllMataKuliah(ctx)
 }
+
+func (s *Service) UpdateMataKuliah(ctx context.Context, id string, mk *model.MataKuliah) error {
+	if err := validateKodeMK(mk.KodeMK); err != nil {
+		return err
+	}
+	if mk.NamaMK == "" {
+		return fmt.Errorf("nama mata kuliah tidak boleh kosong")
+	}
+	if mk.SKS < 1 || mk.SKS > 6 {
+		return fmt.Errorf("SKS harus berada di rentang 1-6")
+	}
+	return s.repo.UpdateMataKuliah(ctx, id, mk)
+}
+
+func (s *Service) DeleteMataKuliah(ctx context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("id mata kuliah tidak valid")
+	}
+	return s.repo.DeleteMataKuliah(ctx, id)
+}

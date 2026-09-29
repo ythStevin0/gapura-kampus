@@ -3,7 +3,7 @@ import { Plus, Search, BookOpen, GraduationCap, Clock, Layers, Trash2, Edit } fr
 import { InputField } from "../../components/ui/InputField";
 import { SelectField } from "../../components/ui/SelectField";
 import { Modal } from "../../components/ui/Modal";
-import { fetchAllMataKuliah, createMataKuliah, type MataKuliah } from "../../lib/api";
+import { fetchAllMataKuliah, createMataKuliah, updateMataKuliah, deleteMataKuliah, type MataKuliah } from "../../lib/api";
 
 export default function AdminMataKuliah() {
   const [mkList, setMkList] = useState<MataKuliah[]>([]);
@@ -14,6 +14,8 @@ export default function AdminMataKuliah() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -43,17 +45,24 @@ export default function AdminMataKuliah() {
     setFormData(prev => ({ ...prev, [name]: name === "sks" || name === "semester" ? Number(value) : value }));
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
-      await createMataKuliah({
+      const payload = {
         ...formData,
         sks: Number(formData.sks),
         semester: Number(formData.semester),
-      });
+      };
+
+      if (isEdit && editId) {
+        await updateMataKuliah(editId, payload);
+      } else {
+        await createMataKuliah(payload);
+      }
+      
       setIsModalOpen(false);
       setFormData({
         kode_mk: "",
@@ -61,11 +70,36 @@ export default function AdminMataKuliah() {
         sks: 0,
         semester: 0,
       });
+      setIsEdit(false);
+      setEditId(null);
       loadMK();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (mk: MataKuliah) => {
+    setFormData({
+      kode_mk: mk.kode_mk,
+      nama_mk: mk.nama_mk,
+      sks: mk.sks,
+      semester: mk.semester,
+    });
+    setEditId(mk.id);
+    setIsEdit(true);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = async (id: string) => {
+    if (confirm("Apakah Anda yakin ingin menghapus mata kuliah ini?")) {
+      try {
+        await deleteMataKuliah(id);
+        loadMK();
+      } catch (err: any) {
+        alert(err.message || "Gagal menghapus mata kuliah");
+      }
     }
   };
 
@@ -87,7 +121,12 @@ export default function AdminMataKuliah() {
           <p className="text-sm text-zinc-500 mt-1">Kelola kurikulum dan bobot SKS prodi.</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setIsEdit(false);
+            setEditId(null);
+            setFormData({ kode_mk: "", nama_mk: "", sks: 0, semester: 0 });
+            setIsModalOpen(true);
+          }}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all shadow-lg shadow-emerald-600/20 text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
@@ -165,10 +204,16 @@ export default function AdminMataKuliah() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors">
+                        <button 
+                          onClick={() => handleEditClick(mk)}
+                          className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors"
+                        >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-colors">
+                        <button 
+                          onClick={() => handleDeleteClick(mk.id)}
+                          className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-colors"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -191,9 +236,9 @@ export default function AdminMataKuliah() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Tambah Mata Kuliah Baru"
+        title={isEdit ? "Edit Mata Kuliah" : "Tambah Mata Kuliah Baru"}
       >
-        <form onSubmit={handleCreate} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <InputField
             label="Kode Mata Kuliah"
             name="kode_mk"

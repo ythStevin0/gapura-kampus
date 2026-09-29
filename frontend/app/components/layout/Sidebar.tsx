@@ -32,6 +32,7 @@ export function Sidebar({ sidebarOpen, role, isSiakad, onOpenMessage, setSidebar
   const allMenus = menuByRole[role] || menuByRole.mahasiswa;
   const menus = allMenus.filter(item => {
     if (role === "admin") return true; 
+    if (role === "dosen") return true; // Dosen selalu tampilkan semua menu
     if (isSiakad) {
       return (
         item.to?.includes("/krs") || 
@@ -39,7 +40,7 @@ export function Sidebar({ sidebarOpen, role, isSiakad, onOpenMessage, setSidebar
         (item.isDropdown && item.subItems?.some(sub => sub.to.includes("/krs")))
       );
     } else {
-      return (item.to === "/dashboard" || item.label === "Pencarian") && !item.to?.includes("/krs");
+      return (item.to === "/dashboard" || item.label === "Pencarian" || item.label === "Mahakarya UISI") && !item.to?.includes("/krs");
     }
   });
 
