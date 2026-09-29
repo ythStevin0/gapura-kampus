@@ -7,6 +7,7 @@ import (
 	"siakad/backend/internal/model"
 	"siakad/backend/pkg/response"
 
+	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
@@ -81,4 +82,54 @@ func (h *Handler) GetAllMataKuliah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, http.StatusOK, "Data mata kuliah berhasil diambil", list)
+}
+
+func (h *Handler) UpdateMataKuliah(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "ID mata kuliah diperlukan", "")
+		return
+	}
+
+	var req struct {
+		KodeMK   string `json:"kode_mk"`
+		NamaMK   string `json:"nama_mk"`
+		SKS      int    `json:"sks"`
+		Semester int    `json:"semester"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Format request tidak valid", err.Error())
+		return
+	}
+
+	mk := model.MataKuliah{
+		KodeMK:   req.KodeMK,
+		NamaMK:   req.NamaMK,
+		SKS:      req.SKS,
+		Semester: req.Semester,
+	}
+
+	err := h.service.UpdateMataKuliah(r.Context(), id, &mk)
+	if err != nil {
+		h.logger.Error("Failed to update mata kuliah", zap.Error(err), zap.String("id", id))
+		response.Error(w, http.StatusInternalServerError, "Gagal mengubah mata kuliah", err.Error())
+		return
+	}
+	response.Success(w, http.StatusOK, "Mata kuliah berhasil diubah", mk)
+}
+
+func (h *Handler) DeleteMataKuliah(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "ID mata kuliah diperlukan", "")
+		return
+	}
+
+	err := h.service.DeleteMataKuliah(r.Context(), id)
+	if err != nil {
+		h.logger.Error("Failed to delete mata kuliah", zap.Error(err), zap.String("id", id))
+		response.Error(w, http.StatusInternalServerError, "Gagal menghapus mata kuliah", err.Error())
+		return
+	}
+	response.Success(w, http.StatusOK, "Mata kuliah berhasil dihapus", nil)
 }

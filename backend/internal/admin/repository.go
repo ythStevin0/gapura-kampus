@@ -3,11 +3,14 @@ package admin
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"siakad/backend/internal/model"
 	"siakad/backend/pkg/database"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 )
 
 type Repository struct {
@@ -28,19 +31,34 @@ type SearchResult struct {
 
 func (r *Repository) GetStats(ctx context.Context) (map[string]int64, error) {
 	stats := make(map[string]int64)
+	var mu sync.Mutex
+
 	queries := map[string]string{
 		"total_mahasiswa": "SELECT COUNT(*) FROM mahasiswa",
 		"total_dosen":     "SELECT COUNT(*) FROM dosen",
 		"total_matkul":    "SELECT COUNT(*) FROM mata_kuliah",
 	}
 
+	g, ctx := errgroup.WithContext(ctx)
+
 	for key, q := range queries {
-		var count int64
-		if err := r.db.QueryRow(ctx, q).Scan(&count); err != nil {
-			return nil, fmt.Errorf("failed to count %s: %w", key, err)
-		}
-		stats[key] = count
+		k, query := key, q
+		g.Go(func() error {
+			var count int64
+			if err := r.db.QueryRow(ctx, query).Scan(&count); err != nil {
+				return fmt.Errorf("failed to count %s: %w", k, err)
+			}
+			mu.Lock()
+			stats[k] = count
+			mu.Unlock()
+			return nil
+		})
 	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
 	return stats, nil
 }
 
@@ -108,4 +126,33 @@ func (r *Repository) GetAllMataKuliah(ctx context.Context) ([]model.MataKuliah, 
 		list = append(list, mk)
 	}
 	return list, nil
+}
+
+func (r *Repository) UpdateMataKuliah(ctx context.Context, id string, mk *model.MataKuliah) error {
+	query := `
+		UPDATE mata_kuliah 
+		SET kode_mk = $1, nama_mk = $2, sks = $3, semester = $4, updated_at = NOW()
+		WHERE id = $5
+		RETURNING updated_at
+	`
+	err := r.db.QueryRow(ctx, query, mk.KodeMK, mk.NamaMK, mk.SKS, mk.Semester, id).Scan(&mk.UpdatedAt)
+	if err != nil {
+		return database.ParsePgError(err)
+	}
+	if parsedID, err := uuid.Parse(id); err == nil {
+		mk.ID = parsedID
+	}
+	return nil
+}
+
+func (r *Repository) DeleteMataKuliah(ctx context.Context, id string) error {
+	query := `DELETE FROM mata_kuliah WHERE id = $1`
+	cmd, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete mata kuliah: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("mata kuliah tidak ditemukan")
+	}
+	return nil
 }

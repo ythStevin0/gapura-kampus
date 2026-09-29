@@ -91,19 +91,6 @@ func hashPassword(t *testing.T, plain string) string {
 	return string(h)
 }
 
-func makeService(repo *mockAuthRepo) *AuthService {
-	// Menggunakan interface-based approach
-	svc := &AuthService{
-		jwtSecret: "test-secret",
-	}
-	// Inject mock via reflection tidak diperlukan karena kita langsung test fungsi service
-	// Tapi karena repo di AuthService adalah *AuthRepository (concrete), kita perlu cara lain.
-	// Untuk TDD yang baik, idealnya repo adalah interface. Kita test fungsi ChangePassword & GetPasswordHistory
-	// dengan memanggil repo methods langsung (integration-style unit test).
-	_ = svc
-	_ = repo
-	return nil // Placeholder, lihat TestChangePassword di bawah untuk pendekatan direct
-}
 
 // --- Unit Tests ---
 

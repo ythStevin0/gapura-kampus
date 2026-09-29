@@ -187,6 +187,8 @@ func main() {
 		// Mata Kuliah
 		r.Get("/mata-kuliah", adminHandler.GetAllMataKuliah)
 		r.Post("/mata-kuliah", adminHandler.CreateMataKuliah)
+		r.Put("/mata-kuliah/{id}", adminHandler.UpdateMataKuliah)
+		r.Delete("/mata-kuliah/{id}", adminHandler.DeleteMataKuliah)
 
 		// Pesan Masuk (Kotak Masuk Admin)
 		r.Get("/pesan", pesanHandler.GetAllForAdmin)

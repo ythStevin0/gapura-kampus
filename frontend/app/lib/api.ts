@@ -192,6 +192,21 @@ export async function createMataKuliah(payload: Record<string, any>) {
   return res.data;
 }
 
+export async function updateMataKuliah(id: string, payload: Record<string, any>) {
+  const res = await apiFetch(`/api/admin/mata-kuliah/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function deleteMataKuliah(id: string) {
+  const res = await apiFetch(`/api/admin/mata-kuliah/${id}`, {
+    method: "DELETE",
+  });
+  return res.data;
+}
+
 // =============================================
 // BERITA / PENGUMUMAN
 // =============================================
