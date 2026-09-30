@@ -30,12 +30,17 @@ func NewPool(logger *zap.Logger) (*pgxpool.Pool, error) { //
 		return nil, fmt.Errorf("failed to parse db config: %w", err)
 	}
 
-	// Maksimal 10 koneksi aktif sekaligus
-	// Minimal 2 koneksi selalu siap standby
-	config.MaxConns = 10
-	config.MinConns = 2
+	// Maksimal 25 koneksi aktif sekaligus.
+	// Ditingkatkan dari 10 karena goroutine concurrent queries membutuhkan
+	// lebih banyak koneksi tersedia di pool secara bersamaan.
+	// Minimal 5 koneksi selalu siap standby untuk menghindari cold-start.
+	config.MaxConns = 25
+	config.MinConns = 5
 	config.MaxConnLifetime = 1 * time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
+	// Health check setiap 1 menit — deteksi koneksi yang sudah mati
+	// sebelum dipakai oleh goroutine (mencegah error di runtime)
+	config.HealthCheckPeriod = 1 * time.Minute
 
 	// Buat pool koneksi
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)

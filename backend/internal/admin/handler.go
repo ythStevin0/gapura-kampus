@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"siakad/backend/internal/model"
+	"siakad/backend/pkg/pagination"
 	"siakad/backend/pkg/response"
 
 	"github.com/go-chi/chi/v5"
@@ -74,6 +75,9 @@ func (h *Handler) CreateMataKuliah(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusCreated, "Mata kuliah berhasil ditambahkan", mk)
 }
 
+// GetAllMataKuliah — GET /api/admin/mata-kuliah
+// Mengembalikan semua mata kuliah (tanpa pagination).
+// Tetap dipertahankan untuk kebutuhan dropdown/select yang butuh data lengkap.
 func (h *Handler) GetAllMataKuliah(w http.ResponseWriter, r *http.Request) {
 	list, err := h.service.GetAllMataKuliah(r.Context())
 	if err != nil {
@@ -82,6 +86,23 @@ func (h *Handler) GetAllMataKuliah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, http.StatusOK, "Data mata kuliah berhasil diambil", list)
+}
+
+// GetMataKuliahPaginated — GET /api/admin/mata-kuliah/paginated?page=1&limit=20
+// Endpoint baru dengan pagination untuk tabel di halaman admin.
+// Mengembalikan data beserta metadata (total_items, total_pages, page, limit).
+func (h *Handler) GetMataKuliahPaginated(w http.ResponseWriter, r *http.Request) {
+	params := pagination.FromRequest(r)
+
+	list, total, err := h.service.GetMataKuliahPaginated(r.Context(), params)
+	if err != nil {
+		h.logger.Error("Failed to get paginated mata kuliah", zap.Error(err))
+		response.Error(w, http.StatusInternalServerError, "Gagal mengambil data mata kuliah", err.Error())
+		return
+	}
+
+	result := pagination.NewResult(list, total, params)
+	response.Success(w, http.StatusOK, "Data mata kuliah berhasil diambil", result)
 }
 
 func (h *Handler) UpdateMataKuliah(w http.ResponseWriter, r *http.Request) {

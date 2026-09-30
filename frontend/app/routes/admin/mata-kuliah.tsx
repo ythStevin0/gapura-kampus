@@ -1,15 +1,25 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, BookOpen, GraduationCap, Clock, Layers, Trash2, Edit } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Plus, Search, BookOpen, Clock, Layers, Trash2, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import { InputField } from "../../components/ui/InputField";
 import { SelectField } from "../../components/ui/SelectField";
 import { Modal } from "../../components/ui/Modal";
-import { fetchAllMataKuliah, createMataKuliah, updateMataKuliah, deleteMataKuliah, type MataKuliah } from "../../lib/api";
+import {
+  fetchMataKuliahPaginated,
+  createMataKuliah,
+  updateMataKuliah,
+  deleteMataKuliah,
+  type MataKuliah,
+  type PaginatedResult,
+} from "../../lib/api";
+
+const ITEMS_PER_PAGE = 20;
 
 export default function AdminMataKuliah() {
-  const [mkList, setMkList] = useState<MataKuliah[]>([]);
+  const [paginatedData, setPaginatedData] = useState<PaginatedResult<MataKuliah> | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,14 +35,27 @@ export default function AdminMataKuliah() {
     semester: 0,
   });
 
-  useEffect(() => {
-    loadMK();
-  }, []);
+  // Debounce timer ref
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const loadMK = async () => {
+  // Debounce search input — menunggu 300ms setelah user berhenti mengetik
+  // agar tidak memfilter di setiap keystroke (mencegah lag pada data besar)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    loadMK(currentPage);
+  }, [currentPage]);
+
+  const loadMK = async (page: number) => {
+    setLoading(true);
     try {
-      const data = await fetchAllMataKuliah();
-      setMkList(data);
+      const data = await fetchMataKuliahPaginated(page, ITEMS_PER_PAGE);
+      setPaginatedData(data);
     } catch (err: any) {
       console.error("Gagal mengambil data mata kuliah:", err);
     } finally {
@@ -64,15 +87,10 @@ export default function AdminMataKuliah() {
       }
       
       setIsModalOpen(false);
-      setFormData({
-        kode_mk: "",
-        nama_mk: "",
-        sks: 0,
-        semester: 0,
-      });
+      setFormData({ kode_mk: "", nama_mk: "", sks: 0, semester: 0 });
       setIsEdit(false);
       setEditId(null);
-      loadMK();
+      loadMK(currentPage);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -80,7 +98,7 @@ export default function AdminMataKuliah() {
     }
   };
 
-  const handleEditClick = (mk: MataKuliah) => {
+  const handleEditClick = useCallback((mk: MataKuliah) => {
     setFormData({
       kode_mk: mk.kode_mk,
       nama_mk: mk.nama_mk,
@@ -90,23 +108,37 @@ export default function AdminMataKuliah() {
     setEditId(mk.id);
     setIsEdit(true);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleDeleteClick = async (id: string) => {
+  const handleDeleteClick = useCallback(async (id: string) => {
     if (confirm("Apakah Anda yakin ingin menghapus mata kuliah ini?")) {
       try {
         await deleteMataKuliah(id);
-        loadMK();
+        loadMK(currentPage);
       } catch (err: any) {
         alert(err.message || "Gagal menghapus mata kuliah");
       }
     }
-  };
+  }, [currentPage]);
 
-  const filteredMK = mkList.filter(
-    (mk) =>
-      mk.nama_mk.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mk.kode_mk.toLowerCase().includes(searchTerm.toLowerCase())
+  // useMemo untuk filter — mencegah re-kalkulasi saat komponen re-render
+  // tanpa perubahan pada data atau kata kunci pencarian
+  const filteredMK = useMemo(() => {
+    if (!paginatedData?.items) return [];
+    if (!debouncedSearch) return paginatedData.items;
+    
+    return paginatedData.items.filter(
+      (mk) =>
+        mk.nama_mk.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        mk.kode_mk.toLowerCase().includes(debouncedSearch.toLowerCase())
+    );
+  }, [paginatedData?.items, debouncedSearch]);
+
+  const totalItems = paginatedData?.total_items ?? 0;
+  const totalPages = paginatedData?.total_pages ?? 1;
+  const totalSKS = useMemo(
+    () => filteredMK.reduce((acc, curr) => acc + curr.sks, 0),
+    [filteredMK]
   );
 
   return (
@@ -138,13 +170,15 @@ export default function AdminMataKuliah() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 backdrop-blur-sm">
           <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Total MK</p>
-          <p className="text-2xl font-bold text-zinc-100 mt-1">{mkList.length}</p>
+          <p className="text-2xl font-bold text-zinc-100 mt-1">{totalItems}</p>
         </div>
         <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 backdrop-blur-sm">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Total SKS</p>
-          <p className="text-2xl font-bold text-emerald-400 mt-1">
-            {mkList.reduce((acc, curr) => acc + curr.sks, 0)}
-          </p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Total SKS (Halaman Ini)</p>
+          <p className="text-2xl font-bold text-emerald-400 mt-1">{totalSKS}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 backdrop-blur-sm">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Halaman</p>
+          <p className="text-2xl font-bold text-sky-400 mt-1">{currentPage} / {totalPages}</p>
         </div>
       </div>
 
@@ -230,9 +264,49 @@ export default function AdminMataKuliah() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-zinc-800/60 flex items-center justify-between">
+            <p className="text-xs text-zinc-500">
+              Menampilkan {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} dari {totalItems} mata kuliah
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                    page === currentPage
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
+                      : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Modal Tambah MK */}
+      {/* Modal Tambah/Edit MK */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
