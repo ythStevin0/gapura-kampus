@@ -207,6 +207,20 @@ export async function deleteMataKuliah(id: string) {
   return res.data;
 }
 
+// Pagination
+export interface PaginatedResult<T> {
+  items: T[];
+  total_items: number;
+  total_pages: number;
+  page: number;
+  limit: number;
+}
+
+export async function fetchMataKuliahPaginated(page: number = 1, limit: number = 20): Promise<PaginatedResult<MataKuliah>> {
+  const res = await apiFetch(`/api/admin/mata-kuliah/paginated?page=${page}&limit=${limit}`);
+  return res.data as PaginatedResult<MataKuliah>;
+}
+
 // =============================================
 // BERITA / PENGUMUMAN
 // =============================================

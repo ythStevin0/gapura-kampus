@@ -23,6 +23,7 @@ import (
 	"siakad/backend/internal/middleware"
 	"siakad/backend/internal/model"
 	"siakad/backend/internal/pesan"
+	"siakad/backend/pkg/cache"
 	"siakad/backend/pkg/database"
 	"siakad/backend/pkg/response"
 )
@@ -52,7 +53,11 @@ func main() {
 		logger.Fatal("Failed to run migrations", zap.Error(err))
 	}
 
-	// 4. Init semua domain (Domain-Driven)
+	// 4. Init in-memory cache
+	appCache := cache.New()
+	logger.Info("In-memory cache initialized")
+
+	// 5. Init semua domain (Domain-Driven)
 
 	// Auth
 	authRepo := auth.NewAuthRepository(db)
@@ -60,7 +65,7 @@ func main() {
 	authHandler := auth.NewAuthHandler(authService, logger)
 
 	// Admin (Stats, MK, Search)
-	adminRepo := admin.NewRepository(db)
+	adminRepo := admin.NewRepository(db, appCache)
 	adminService := admin.NewService(adminRepo)
 
 	// Mahasiswa
@@ -186,6 +191,7 @@ func main() {
 
 		// Mata Kuliah
 		r.Get("/mata-kuliah", adminHandler.GetAllMataKuliah)
+		r.Get("/mata-kuliah/paginated", adminHandler.GetMataKuliahPaginated)
 		r.Post("/mata-kuliah", adminHandler.CreateMataKuliah)
 		r.Put("/mata-kuliah/{id}", adminHandler.UpdateMataKuliah)
 		r.Delete("/mata-kuliah/{id}", adminHandler.DeleteMataKuliah)

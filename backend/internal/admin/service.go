@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"siakad/backend/internal/model"
+	"siakad/backend/pkg/pagination"
 )
 
 type Service struct {
@@ -45,8 +46,14 @@ func (s *Service) CreateMataKuliah(ctx context.Context, mk *model.MataKuliah) er
 	return s.repo.CreateMataKuliah(ctx, mk)
 }
 
+// GetAllMataKuliah mengambil semua data (untuk dropdown/select).
 func (s *Service) GetAllMataKuliah(ctx context.Context) ([]model.MataKuliah, error) {
 	return s.repo.GetAllMataKuliah(ctx)
+}
+
+// GetMataKuliahPaginated mengambil data dengan pagination (untuk tabel admin).
+func (s *Service) GetMataKuliahPaginated(ctx context.Context, params pagination.Params) ([]model.MataKuliah, int64, error) {
+	return s.repo.GetMataKuliahPaginated(ctx, params)
 }
 
 func (s *Service) UpdateMataKuliah(ctx context.Context, id string, mk *model.MataKuliah) error {
