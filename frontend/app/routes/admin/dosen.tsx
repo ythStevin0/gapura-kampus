@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Search, Users, UserPlus, Mail, Building2, Trash2, Edit } from "lucide-react";
 import { InputField } from "../../components/ui/InputField";
 import { SelectField } from "../../components/ui/SelectField";
 import { Modal } from "../../components/ui/Modal";
 import { fetchAllDosen, createDosen, updateDosen, deleteDosen, type Dosen } from "../../lib/api";
+import { useDebounce } from "../../hooks/useOptimization";
 
 export default function AdminDosen() {
   const [dosenList, setDosenList] = useState<Dosen[]>([]);
@@ -63,7 +64,8 @@ export default function AdminDosen() {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (d: Dosen) => {
+  // useCallback: referensi fungsi stabil → child component tidak re-render
+  const openEditModal = useCallback((d: Dosen) => {
     setIsEditMode(true);
     setEditingId(d.id);
     setFormData({
@@ -72,13 +74,13 @@ export default function AdminDosen() {
       gelar_depan: d.gelar_depan || "",
       gelar_belakang: d.gelar_belakang || "",
       departemen: d.departemen,
-      password: "", // Password dikosongi saat edit
+      password: "",
     });
     setError(null);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string, nama: string) => {
+  const handleDelete = useCallback(async (id: string, nama: string) => {
     if (!confirm(`Hapus dosen: ${nama}?`)) return;
     try {
       await deleteDosen(id);
@@ -86,7 +88,7 @@ export default function AdminDosen() {
     } catch (err: any) {
       alert("Gagal menghapus: " + err.message);
     }
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,11 +125,28 @@ export default function AdminDosen() {
     }
   };
 
-  const filteredDosen = dosenList.filter(
-    (d) =>
-      d.nama_lengkap.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.nidn.includes(searchTerm) ||
-      d.departemen.toLowerCase().includes(searchTerm.toLowerCase())
+  // Debounce: menunggu 300ms setelah user berhenti mengetik
+  // sebelum memfilter array → mencegah lag pada data besar
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
+  // useMemo: hanya re-filter jika data atau keyword benar-benar berubah
+  // Tanpa useMemo: filter dijalankan setiap kali komponen re-render
+  // (bahkan saat membuka modal, mengetik form, dll — yang tidak relevan)
+  const filteredDosen = useMemo(() => {
+    if (!debouncedSearch) return dosenList;
+    const q = debouncedSearch.toLowerCase();
+    return dosenList.filter(
+      (d) =>
+        d.nama_lengkap.toLowerCase().includes(q) ||
+        d.nidn.includes(debouncedSearch) ||
+        d.departemen.toLowerCase().includes(q)
+    );
+  }, [dosenList, debouncedSearch]);
+
+  // useMemo: mencegah kalkulasi ulang jumlah departemen unik
+  const uniqueDeptCount = useMemo(
+    () => new Set(dosenList.map(d => d.departemen)).size,
+    [dosenList]
   );
 
   // Helper untuk preview email keren
@@ -171,7 +190,7 @@ export default function AdminDosen() {
         <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 backdrop-blur-sm">
           <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Departemen</p>
           <p className="text-2xl font-bold text-zinc-100 mt-1">
-            {new Set(dosenList.map(d => d.departemen)).size}
+            {uniqueDeptCount}
           </p>
         </div>
       </div>

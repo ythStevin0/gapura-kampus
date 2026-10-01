@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -41,6 +42,24 @@ func NewPool(logger *zap.Logger) (*pgxpool.Pool, error) { //
 	// Health check setiap 1 menit — deteksi koneksi yang sudah mati
 	// sebelum dipakai oleh goroutine (mencegah error di runtime)
 	config.HealthCheckPeriod = 1 * time.Minute
+
+	// Prepared Statement Cache (pgx v5 default behavior):
+	// ───────────────────────────────────────────────────────
+	// pgx v5 secara default menggunakan QueryExecModeCacheDescribe,
+	// yang berarti SETIAP query otomatis di-cache sebagai prepared statement.
+	//
+	// Cara kerjanya:
+	//   1. Query pertama: PostgreSQL mem-parse & merencanakan query → disimpan di cache
+	//   2. Query berikutnya (parameter berbeda): LANGSUNG eksekusi tanpa parse/plan ulang
+	//
+	// Contoh nyata di proyek ini:
+	//   - "SELECT * FROM mata_kuliah WHERE id = $1" → di-parse sekali
+	//   - Panggilan ke-2 dengan id berbeda → skip parse, langsung eksekusi (lebih cepat)
+	//
+	// Kita set StatementCacheCapacity = 256 agar cukup untuk seluruh query di proyek ini.
+	// (Default pgx = 512, kita turunkan karena proyek ini belum sebesar itu)
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeCacheDescribe
+	config.ConnConfig.StatementCacheCapacity = 256
 
 	// Buat pool koneksi
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
