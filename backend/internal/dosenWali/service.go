@@ -103,31 +103,22 @@ func (s *Service) AssignDosenWali(ctx context.Context, mahasiswaID string, dosen
 	return s.repo.AssignDosenWali(ctx, mahasiswaID, dosenID)
 }
 
-// AutoAssignByDept mencari mahasiswa tanpa wali di departemen tertentu dan menugaskannya otomatis
+// AutoAssignByDept menugaskan dosen wali ke mahasiswa tanpa wali di departemen tertentu.
+// Menggunakan SATU query SQL (batch) untuk menghindari N+1 problem.
+//
+// Sebelumnya (N+1 Pattern):
+//   for _, mhsID := range mhsIDs {
+//       dosenID := GetLecturerWithMinStudents()  ← query 1 per mahasiswa
+//       AssignDosenWali(mhsID, dosenID)           ← query 2 per mahasiswa
+//   }
+//   Total: 1 + (2 × N) queries
+//
+// Sesudah (Batch):
+//   BatchAutoAssignByDept()  ← 1 query saja untuk semua mahasiswa
 func (s *Service) AutoAssignByDept(ctx context.Context, dept string) (int, error) {
-	// 1. Ambil semua mahasiswa tanpa wali di prodi/dept tersebut
-	mhsIDs, err := s.repo.GetUnassignedByDept(ctx, dept)
+	count, err := s.repo.BatchAutoAssignByDept(ctx, dept)
 	if err != nil {
-		return 0, fmt.Errorf("gagal mencari mahasiswa tanpa wali: %w", err)
+		return 0, fmt.Errorf("gagal auto-assign dosen wali: %w", err)
 	}
-	if len(mhsIDs) == 0 {
-		return 0, nil
-	}
-
-	assignedCount := 0
-	for _, mhsID := range mhsIDs {
-		// 2. Cari dosen di dept tersebut yang bebannya paling ringan
-		dosenID, err := s.repo.GetLecturerWithMinStudents(ctx, dept)
-		if err != nil {
-			// Jika tidak ada dosen di dept tersebut, lewati
-			continue
-		}
-
-		// 3. Assign
-		if err := s.repo.AssignDosenWali(ctx, mhsID, dosenID); err == nil {
-			assignedCount++
-		}
-	}
-
-	return assignedCount, nil
+	return int(count), nil
 }

@@ -273,3 +273,46 @@ func (r *Repository) GetLecturerWithMinStudents(ctx context.Context, dept string
 	}
 	return id, nil
 }
+
+// BatchAutoAssignByDept menugaskan dosen wali ke semua mahasiswa tanpa wali
+// di departemen tertentu dalam SATU query SQL (menghindari N+1 problem).
+//
+// Cara kerja:
+//   1. CTE 'unassigned': ambil semua mahasiswa tanpa wali di dept, beri nomor urut (ROW_NUMBER)
+//   2. CTE 'available_dosen': ambil semua dosen di dept, beri nomor urut
+//   3. UPDATE: assign mahasiswa ke dosen secara round-robin menggunakan modulo
+//      Contoh: 10 mahasiswa, 3 dosen → dosen1 dapat 4, dosen2 dapat 3, dosen3 dapat 3
+//
+// Mengembalikan jumlah mahasiswa yang berhasil di-assign.
+func (r *Repository) BatchAutoAssignByDept(ctx context.Context, dept string) (int64, error) {
+	query := `
+		WITH unassigned AS (
+			SELECT id, ROW_NUMBER() OVER (ORDER BY angkatan, nama_lengkap) AS rn
+			FROM mahasiswa
+			WHERE dosen_wali_id IS NULL AND program_studi = $1
+		),
+		available_dosen AS (
+			SELECT d.id, ROW_NUMBER() OVER (ORDER BY COUNT(m.id) ASC, d.id) AS rn
+			FROM dosen d
+			LEFT JOIN mahasiswa m ON m.dosen_wali_id = d.id
+			WHERE d.departemen = $1
+			GROUP BY d.id
+		),
+		dosen_count AS (
+			SELECT COUNT(*) AS cnt FROM available_dosen
+		)
+		UPDATE mahasiswa
+		SET dosen_wali_id = (
+			SELECT ad.id FROM available_dosen ad, dosen_count dc
+			WHERE ad.rn = ((u.rn - 1) % dc.cnt) + 1
+		),
+		updated_at = NOW()
+		FROM unassigned u
+		WHERE mahasiswa.id = u.id
+	`
+	cmd, err := r.db.Exec(ctx, query, dept)
+	if err != nil {
+		return 0, fmt.Errorf("batch auto-assign failed: %w", err)
+	}
+	return cmd.RowsAffected(), nil
+}

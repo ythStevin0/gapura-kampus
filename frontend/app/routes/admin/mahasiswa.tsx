@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchAllMahasiswa, createMahasiswa, updateMahasiswa, deleteMahasiswa, type Mahasiswa } from "../../lib/api";
 import { Modal } from "../../components/ui/Modal";
 import { InputField } from "../../components/ui/InputField";
 import { SelectField } from "../../components/ui/SelectField";
-import { UserPlus, Edit, Trash2, GraduationCap, Building2, Calendar, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
+import { UserPlus, Edit, Trash2, GraduationCap, Building2, Calendar, CheckCircle2, XCircle, ShieldCheck, Search } from "lucide-react";
+import { useDebounce } from "../../hooks/useOptimization";
 
 export default function AdminMahasiswa() {
   const [mahasiswaList, setMahasiswaList] = useState<Mahasiswa[]>([]);
@@ -12,6 +13,7 @@ export default function AdminMahasiswa() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [formData, setFormData] = useState({
     nim: "",
@@ -66,7 +68,8 @@ export default function AdminMahasiswa() {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (m: Mahasiswa) => {
+  // useCallback: referensi fungsi stabil agar child tidak re-render
+  const openEditModal = useCallback((m: Mahasiswa) => {
     setEditingId(m.id);
     setFormData({
       nim: m.nim,
@@ -80,9 +83,9 @@ export default function AdminMahasiswa() {
       password: "",
     });
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string, nama: string) => {
+  const handleDelete = useCallback(async (id: string, nama: string) => {
     if (!confirm(`Apakah Anda yakin ingin menghapus mahasiswa ${nama}? Akun login juga akan dihapus.`)) return;
     try {
       await deleteMahasiswa(id);
@@ -90,7 +93,23 @@ export default function AdminMahasiswa() {
     } catch (err: any) {
       alert("Gagal menghapus: " + err.message);
     }
-  };
+  }, []);
+
+  // Debounce pencarian 300ms
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
+  // useMemo: filter hanya berjalan saat data atau keyword berubah
+  const filteredMahasiswa = useMemo(() => {
+    if (!debouncedSearch) return mahasiswaList;
+    const q = debouncedSearch.toLowerCase();
+    return mahasiswaList.filter(
+      (m) =>
+        m.nama_lengkap.toLowerCase().includes(q) ||
+        m.nim.toLowerCase().includes(q) ||
+        m.program_studi.toLowerCase().includes(q)
+    );
+  }, [mahasiswaList, debouncedSearch]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,8 +150,18 @@ export default function AdminMahasiswa() {
         </button>
       </div>
 
-      {/* Tabel */}
+      {/* Search & Tabel */}
       <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl overflow-hidden backdrop-blur-md">
+        <div className="p-4 border-b border-zinc-800/60 flex items-center gap-3">
+          <Search className="w-5 h-5 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Cari NIM, Nama, atau Program Studi..."
+            className="bg-transparent border-none focus:ring-0 text-sm text-zinc-200 w-full"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -153,8 +182,8 @@ export default function AdminMahasiswa() {
                     <td className="p-4"></td>
                   </tr>
                 ))
-              ) : mahasiswaList.length > 0 ? (
-                mahasiswaList.map((m) => (
+              ) : filteredMahasiswa.length > 0 ? (
+                filteredMahasiswa.map((m) => (
                   <tr key={m.id} className="hover:bg-zinc-800/30 transition-colors group">
                     <td className="p-4">
                       <div className="flex flex-col">
