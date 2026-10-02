@@ -18,10 +18,12 @@ import (
 	"siakad/backend/internal/berita"
 	"siakad/backend/internal/dosen"
 	"siakad/backend/internal/dosenWali"
+	"siakad/backend/internal/kelas"
 	"siakad/backend/internal/mahakarya"
 	"siakad/backend/internal/mahasiswa"
 	"siakad/backend/internal/middleware"
 	"siakad/backend/internal/model"
+	"siakad/backend/internal/payment"
 	"siakad/backend/internal/pesan"
 	"siakad/backend/pkg/cache"
 	"siakad/backend/pkg/database"
@@ -106,6 +108,14 @@ func main() {
 	akademikRepo := akademik.NewRepository(db)
 	akademikService := akademik.NewService(akademikRepo, mahasiswaRepo)
 	akademikHandler := akademik.NewHandler(akademikService)
+
+	kelasRepo := kelas.NewRepository(db)
+	kelasService := kelas.NewService(kelasRepo)
+	kelasHandler := kelas.NewHandler(kelasService, logger)
+
+	paymentRepo := payment.NewRepository(db)
+	paymentService := payment.NewService(paymentRepo)
+	paymentHandler := payment.NewHandler(paymentService, mahasiswaRepo, logger)
 
 	// 5. Init router
 	r := chi.NewRouter()
@@ -196,6 +206,12 @@ func main() {
 		r.Put("/mata-kuliah/{id}", adminHandler.UpdateMataKuliah)
 		r.Delete("/mata-kuliah/{id}", adminHandler.DeleteMataKuliah)
 
+		// Kelas
+		r.Get("/kelas", kelasHandler.GetAll)
+		r.Post("/kelas", kelasHandler.Create)
+		r.Put("/kelas/{id}", kelasHandler.Update)
+		r.Delete("/kelas/{id}", kelasHandler.Delete)
+
 		// Pesan Masuk (Kotak Masuk Admin)
 		r.Get("/pesan", pesanHandler.GetAllForAdmin)
 		r.Put("/pesan/{id}/read", pesanHandler.MarkAsRead)
@@ -252,6 +268,18 @@ func main() {
 			r.Post("/submit", mahakaryaHandler.Submit)
 			r.Get("/my", mahakaryaHandler.GetMySubmissions)
 			r.Put("/{id}", mahakaryaHandler.UpdateSubmission) // Re-submit karya yang direvisi
+		})
+	})
+
+	// 13. Route Payment
+	r.Route("/api/payment", func(r chi.Router) {
+		r.Post("/webhook", paymentHandler.Webhook) // Midtrans webhook
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Authenticate(os.Getenv("JWT_SECRET"), logger))
+			r.Use(middleware.RequireRole("mahasiswa"))
+			r.Get("/tagihan", paymentHandler.GetTagihan)
+			r.Get("/transaksi", paymentHandler.GetTransaksi)
+			r.Post("/checkout", paymentHandler.Checkout)
 		})
 	})
 

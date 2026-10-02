@@ -1,5 +1,6 @@
 // @ts-expect-error - TS 5.9 + moduleResolution bundler gives false positive for react-window exports
-import { FixedSizeList as List } from "react-window";
+import pkg from "react-window";
+const { FixedSizeList: List } = pkg;
 import type { CSSProperties } from "react";
 import { useRef, useEffect, useState, memo } from "react";
 

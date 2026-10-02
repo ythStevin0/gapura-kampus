@@ -333,3 +333,71 @@ export async function fetchProfilKRS(): Promise<ProfilKRS> {
 }
 
 
+
+// --- KELAS ADMIN API ---
+export async function fetchAllKelas(): Promise<Kelas[]> {
+  const res = await apiFetch('/api/admin/kelas');
+  return res.data || [];
+}
+
+export async function createKelas(payload: Partial<Kelas>): Promise<Kelas> {
+  const res = await apiFetch('/api/admin/kelas', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function updateKelas(id: string, payload: Partial<Kelas>): Promise<Kelas> {
+  const res = await apiFetch(`/api/admin/kelas/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function deleteKelas(id: string): Promise<void> {
+  await apiFetch(`/api/admin/kelas/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// =============================================
+// PAYMENT / UISI PAY (MAHASISWA)
+// =============================================
+export interface Tagihan {
+  id: string;
+  type: string;
+  amount: number;
+  dueDate: string;
+  status: "Belum Bayar" | "Lunas" | "Menunggu Verifikasi";
+}
+
+export interface Transaksi {
+  id: string;
+  order_id: string;
+  jenis_tagihan: string;
+  jumlah: number;
+  status: string;
+  metode_pembayaran?: string;
+  snap_token?: string;
+  created_at: string;
+}
+
+export async function fetchTagihan(): Promise<Tagihan[]> {
+  const res = await apiFetch("/api/payment/tagihan");
+  return res.data || [];
+}
+
+export async function fetchTransaksi(): Promise<Transaksi[]> {
+  const res = await apiFetch("/api/payment/transaksi");
+  return res.data || [];
+}
+
+export async function checkoutPayment(jenis_tagihan: string, amount: number): Promise<Transaksi> {
+  const res = await apiFetch("/api/payment/checkout", {
+    method: "POST",
+    body: JSON.stringify({ jenis_tagihan, amount }),
+  });
+  return res.data;
+}
