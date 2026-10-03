@@ -16,6 +16,8 @@ export default [
     route("persetujuan-krs", "routes/dashboard.persetujuan-krs.tsx"),
     route("master-data", "routes/dashboard.master-data.tsx"),
     route("review-mahakarya", "routes/dashboard.review-mahakarya.tsx"),
+    route("perpustakaan", "routes/dashboard.perpustakaan.tsx"),
+    route("admin/perpustakaan", "routes/admin.perpustakaan.tsx"),
   ]),
 
   // Admin Panel

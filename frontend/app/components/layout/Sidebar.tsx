@@ -40,7 +40,7 @@ export function Sidebar({ sidebarOpen, role, isSiakad, onOpenMessage, setSidebar
         (item.isDropdown && item.subItems?.some(sub => sub.to.includes("/krs")))
       );
     } else {
-      return (item.to === "/dashboard" || item.label === "Pencarian" || item.label === "Mahakarya UISI") && !item.to?.includes("/krs");
+      return (item.to === "/dashboard" || item.label === "Pencarian" || item.label === "Mahakarya UISI" || item.label === "Perpustakaan" || item.to === "/dashboard/uisi-pay") && !item.to?.includes("/krs");
     }
   });
 

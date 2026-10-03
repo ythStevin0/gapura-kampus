@@ -31,6 +31,24 @@ export const menuByRole: Record<string, MenuItem[]> = {
       ),
     },
     {
+      label: "Perpustakaan",
+      to: "/dashboard/perpustakaan",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/>
+        </svg>
+      ),
+    },
+    {
+      label: "UISI Pay",
+      to: "/dashboard/uisi-pay",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
+        </svg>
+      ),
+    },
+    {
       label: "Dashboard",
       to: "/dashboard/krs",
       icon: (
@@ -197,6 +215,15 @@ export const menuByRole: Record<string, MenuItem[]> = {
         </svg>
       ),
     },
+    {
+      label: "Perpustakaan",
+      to: "/dashboard/perpustakaan",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/>
+        </svg>
+      ),
+    },
   ],
   admin: [
     {
@@ -225,6 +252,15 @@ export const menuByRole: Record<string, MenuItem[]> = {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/>
           <path d="M3 12A9 3 0 0 0 21 12"/>
+        </svg>
+      ),
+    },
+    {
+      label: "Perpustakaan",
+      to: "/dashboard/admin/perpustakaan",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/>
         </svg>
       ),
     },

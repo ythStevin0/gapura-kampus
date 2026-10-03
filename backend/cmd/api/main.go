@@ -24,6 +24,7 @@ import (
 	"siakad/backend/internal/middleware"
 	"siakad/backend/internal/model"
 	"siakad/backend/internal/payment"
+	"siakad/backend/internal/perpustakaan"
 	"siakad/backend/internal/pesan"
 	"siakad/backend/pkg/cache"
 	"siakad/backend/pkg/database"
@@ -116,6 +117,10 @@ func main() {
 	paymentRepo := payment.NewRepository(db)
 	paymentService := payment.NewService(paymentRepo)
 	paymentHandler := payment.NewHandler(paymentService, mahasiswaRepo, logger)
+
+	perpustakaanRepo := perpustakaan.NewRepository(db)
+	perpustakaanService := perpustakaan.NewService(perpustakaanRepo)
+	perpustakaanHandler := perpustakaan.NewHandler(perpustakaanService, logger)
 
 	// 5. Init router
 	r := chi.NewRouter()
@@ -281,6 +286,20 @@ func main() {
 			r.Get("/transaksi", paymentHandler.GetTransaksi)
 			r.Post("/checkout", paymentHandler.Checkout)
 		})
+	})
+
+	// 14. Route Perpustakaan
+	r.Route("/api/perpustakaan", func(r chi.Router) {
+		r.Use(middleware.Authenticate(os.Getenv("JWT_SECRET"), logger))
+		r.Get("/buku", perpustakaanHandler.GetAllBuku)
+		r.Post("/pinjam", perpustakaanHandler.PinjamBuku)
+		r.Get("/peminjaman/me", perpustakaanHandler.GetPeminjamanSaya)
+	})
+	r.Route("/api/admin/perpustakaan", func(r chi.Router) {
+		r.Use(middleware.Authenticate(os.Getenv("JWT_SECRET"), logger))
+		r.Use(middleware.RequireRole("admin", "dosen"))
+		r.Post("/buku", perpustakaanHandler.CreateBuku)
+		r.Put("/kembali/{id}", perpustakaanHandler.KembalikanBuku)
 	})
 
 	// 11. Start Server
