@@ -86,7 +86,9 @@ export function Header({
             </div>
             <div className="text-left hidden sm:block">
               <p className="text-xs font-bold text-zinc-300 leading-none">{user?.name || user?.email}</p>
-              <p className="text-[10px] text-zinc-500 mt-1 uppercase font-black tracking-tighter">Mahasiswa</p>
+              <p className="text-[10px] text-zinc-500 mt-1 uppercase font-black tracking-tighter">
+                {user?.role === "admin" ? "Administrator" : user?.role === "dosen" ? "Dosen" : "Mahasiswa"}
+              </p>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${dropdownOpen ? "rotate-180" : ""}`}>
               <path d="M6 9l6 6 6-6"/>

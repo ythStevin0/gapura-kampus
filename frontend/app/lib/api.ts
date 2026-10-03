@@ -25,6 +25,13 @@ async function apiFetch(path: string, options?: RequestInit) {
 
   const data = await res.json();
   if (!res.ok) {
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+      }
+    }
     throw new Error(data.error || data.message || "Terjadi kesalahan");
   }
   return data;
@@ -400,4 +407,61 @@ export async function checkoutPayment(jenis_tagihan: string, amount: number): Pr
     body: JSON.stringify({ jenis_tagihan, amount }),
   });
   return res.data;
+}
+
+// =============================================
+// PERPUSTAKAAN (LIBRARY)
+// =============================================
+export interface Buku {
+  id: string;
+  judul: string;
+  penulis: string;
+  penerbit: string;
+  tahun_terbit: number;
+  isbn: string;
+  stok: number;
+  cover_url: string;
+}
+
+export interface PeminjamanBuku {
+  id: string;
+  user_id: string;
+  buku_id: string;
+  tanggal_pinjam: string;
+  tenggat_waktu: string;
+  tanggal_kembali: string | null;
+  status: string;
+  buku?: Buku;
+}
+
+export async function fetchAllBuku(): Promise<Buku[]> {
+  const res = await apiFetch("/api/perpustakaan/buku");
+  return res.data || [];
+}
+
+export async function pinjamBuku(buku_id: string): Promise<PeminjamanBuku> {
+  const res = await apiFetch("/api/perpustakaan/pinjam", {
+    method: "POST",
+    body: JSON.stringify({ buku_id }),
+  });
+  return res.data;
+}
+
+export async function fetchPeminjamanSaya(): Promise<PeminjamanBuku[]> {
+  const res = await apiFetch("/api/perpustakaan/peminjaman/me");
+  return res.data || [];
+}
+
+export async function createBukuAdmin(payload: Partial<Buku>): Promise<Buku> {
+  const res = await apiFetch("/api/admin/perpustakaan/buku", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function kembalikanBukuAdmin(id: string): Promise<void> {
+  await apiFetch(`/api/admin/perpustakaan/kembali/${id}`, {
+    method: "PUT",
+  });
 }
