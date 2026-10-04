@@ -118,10 +118,15 @@ export default function AdminMahasiswa() {
     try {
       if (editingId) {
         await updateMahasiswa(editingId, formData);
+        setIsModalOpen(false);
       } else {
-        await createMahasiswa(formData);
+        const result = await createMahasiswa(formData);
+        // Tampilkan password yang di-generate jika ada
+        if (result && result.generated_password) {
+          alert(`Berhasil mendaftarkan mahasiswa!\n\nEmail: ${result.email_generated}\nPassword: ${result.generated_password}\n\n⚠️ Simpan password ini. Password ini tidak akan ditampilkan lagi!`);
+        }
+        setIsModalOpen(false);
       }
-      setIsModalOpen(false);
       loadMahasiswa();
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -367,14 +372,14 @@ export default function AdminMahasiswa() {
           {!editingId && (
             <div className="space-y-1">
               <InputField
-                label="Password Akun Baru"
+                label="Password Akun (Opsional)"
                 name="password"
                 type="text"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="Minimal 6 karakter"
-                required
+                placeholder="Kosongkan untuk auto-generate password"
               />
+              <p className="text-[11px] text-zinc-500">Jika dikosongkan, sistem akan meng-generate password unik dan aman.</p>
             </div>
           )}
 

@@ -6,6 +6,7 @@ import (
 
 	"siakad/backend/internal/model"
 	"siakad/backend/pkg/response"
+	"siakad/backend/pkg/util"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -42,7 +43,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		ProgramStudi string  `json:"program_studi"`
 		Angkatan     int     `json:"angkatan"`
 		JalurMasuk   *string `json:"jalur_masuk"`
-		Password     string  `json:"password"`
+		Password     string  `json:"password"` // Opsional — jika kosong, auto-generate
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -50,12 +51,23 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Password) < 6 {
-		response.Error(w, http.StatusBadRequest, "Password terlalu pendek", "Minimal 6 karakter")
-		return
+	// Jika admin tidak mengisi password, auto-generate password unik berdasarkan NIM
+	plainPassword := req.Password
+	if plainPassword == "" {
+		plainPassword = util.GenerateSecurePassword(req.NIM, "mahasiswa")
+	} else {
+		// Validasi kekuatan password jika admin memasukkan sendiri
+		if err := util.ValidatePasswordStrength(plainPassword); err != nil {
+			response.Error(w, http.StatusBadRequest, "Password tidak memenuhi standar keamanan", err.Error())
+			return
+		}
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mengamankan password", err.Error())
+		return
+	}
 
 	m := model.Mahasiswa{
 		NIM:          req.NIM,
@@ -65,14 +77,21 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		JalurMasuk:   req.JalurMasuk,
 	}
 
-	err := h.service.Create(r.Context(), &m, string(hashed))
-	if err != nil {
+	if err := h.service.Create(r.Context(), &m, string(hashed)); err != nil {
 		h.logger.Error("Failed to insert mahasiswa", zap.Error(err))
 		response.Error(w, http.StatusInternalServerError, "Gagal menambahkan mahasiswa", err.Error())
 		return
 	}
 
-	response.Success(w, http.StatusCreated, "Mahasiswa berhasil didaftarkan", m)
+	// Kembalikan password plaintext di response agar admin bisa memberikan ke mahasiswa
+	// Password ini HANYA ditampilkan sekali dan tidak pernah disimpan dalam bentuk plaintext
+	result := map[string]interface{}{
+		"mahasiswa":          m,
+		"generated_password": plainPassword,
+		"email_generated":    util.GenerateUsername(req.NamaLengkap, req.Angkatan) + "@mahasiswa.uisi.ac.id",
+	}
+
+	response.Success(w, http.StatusCreated, "Mahasiswa berhasil didaftarkan", result)
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {

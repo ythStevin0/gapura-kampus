@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"siakad/backend/internal/middleware"
 	"siakad/backend/internal/model"
 	"siakad/backend/pkg/response"
+	"siakad/backend/pkg/util"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -60,8 +62,6 @@ func (h *Handler) GetAllDosen(w http.ResponseWriter, r *http.Request) {
 		m, errM := h.mahasiswaService.GetByUserID(r.Context(), userCtx.UserID)
 		if errM != nil {
 			h.logger.Error("Failed to get mahasiswa profile for filtering", zap.String("userID", userCtx.UserID), zap.Error(errM))
-			// Fallback ke semua dosen atau kirim error? User minta "harus menyesuaikan"
-			// Kita ambil semua dosen saja jika profil mahasiswa tidak ditemukan (untuk keamanan tampilan)
 			list, err = h.service.GetAll(r.Context())
 		} else {
 			list, err = h.service.GetByDepartemen(r.Context(), m.ProgramStudi)
@@ -87,7 +87,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		GelarDepan    *string `json:"gelar_depan"`
 		GelarBelakang *string `json:"gelar_belakang"`
 		Departemen    string  `json:"departemen"`
-		Password      string  `json:"password"`
+		Password      string  `json:"password"` // Opsional — jika kosong, auto-generate
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -95,12 +95,23 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Password) < 6 {
-		response.Error(w, http.StatusBadRequest, "Password terlalu pendek", "Minimal 6 karakter")
-		return
+	// Jika admin tidak mengisi password, auto-generate password unik berdasarkan NIDN
+	plainPassword := req.Password
+	if plainPassword == "" {
+		plainPassword = util.GenerateSecurePassword(req.NIDN, "dosen")
+	} else {
+		// Validasi kekuatan password jika admin memasukkan sendiri
+		if err := util.ValidatePasswordStrength(plainPassword); err != nil {
+			response.Error(w, http.StatusBadRequest, "Password tidak memenuhi standar keamanan", err.Error())
+			return
+		}
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mengamankan password", err.Error())
+		return
+	}
 
 	d := model.Dosen{
 		NIDN:          req.NIDN,
@@ -110,8 +121,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Departemen:    req.Departemen,
 	}
 
-	err := h.service.Create(r.Context(), &d, string(hashed))
-	if err != nil {
+	if err := h.service.Create(r.Context(), &d, string(hashed)); err != nil {
 		h.logger.Error("Failed to create dosen", zap.Error(err))
 		response.Error(w, http.StatusInternalServerError, "Gagal mendaftarkan dosen", err.Error())
 		return
@@ -120,12 +130,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	// Trigger Auto Assign untuk mahasiswa yang belum punya wali di departemen ini
 	assignedCount, _ := h.dosenWaliService.AutoAssignByDept(r.Context(), d.Departemen)
 	if assignedCount > 0 {
-		h.logger.Info("Auto-assigned students to new lecturer", 
-			zap.String("dept", d.Departemen), 
+		h.logger.Info("Auto-assigned students to new lecturer",
+			zap.String("dept", d.Departemen),
 			zap.Int("count", assignedCount))
 	}
 
-	response.Success(w, http.StatusCreated, "Dosen berhasil didaftarkan", d)
+	// Kembalikan password plaintext di response agar admin bisa memberikan ke dosen
+	result := map[string]interface{}{
+		"dosen":              d,
+		"generated_password": plainPassword,
+		"email_generated":    util.GenerateUsername(req.NamaLengkap, time.Now().Year()) + "@dosen.uisi.ac.id",
+	}
+
+	response.Success(w, http.StatusCreated, "Dosen berhasil didaftarkan", result)
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
