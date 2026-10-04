@@ -104,11 +104,14 @@ export default function AdminDosen() {
       
       if (isEditMode && editingId) {
         await updateDosen(editingId, payload);
+        setIsModalOpen(false);
       } else {
-        await createDosen(payload);
+        const result = await createDosen(payload);
+        if (result && result.generated_password) {
+          alert(`Berhasil mendaftarkan dosen!\n\nEmail: (format: nama.belakangYY@dosen.uisi.ac.id)\nPassword: ${result.generated_password}\n\n⚠️ Simpan password ini. Password ini tidak akan ditampilkan lagi!`);
+        }
+        setIsModalOpen(false);
       }
-      
-      setIsModalOpen(false);
       setFormData({
         nidn: "",
         nama_lengkap: "",
@@ -345,14 +348,14 @@ export default function AdminDosen() {
           {!isEditMode && (
             <div className="space-y-2">
               <InputField
-                label="Password Akun"
+                label="Password Akun (Opsional)"
                 name="password"
-                type="password"
-                placeholder="Minimal 6 karakter"
-                required={!isEditMode}
+                type="text"
+                placeholder="Kosongkan untuk auto-generate password"
                 value={formData.password}
                 onChange={handleInputChange}
               />
+              <p className="text-[11px] text-zinc-500">Jika dikosongkan, sistem akan meng-generate password unik dan aman.</p>
               <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50">
                 <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Preview Email Login</p>
                 <p className="text-sm text-indigo-400 font-mono mt-1">{getEmailPreview()}</p>

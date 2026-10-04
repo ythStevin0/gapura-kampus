@@ -226,7 +226,7 @@ export default function DashboardPerpustakaan() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
             {filteredKatalog.map((buku) => (
               <div key={buku.id} className="group flex flex-col bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:bg-white/10 transition-all">
-                <div className="aspect-[3/4] relative bg-zinc-800">
+                <div className="aspect-3/4 relative bg-zinc-800">
                   {buku.cover_url ? (
                     <img src={buku.cover_url} alt={buku.judul} className="w-full h-full object-cover" />
                   ) : (
