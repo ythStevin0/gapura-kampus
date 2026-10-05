@@ -21,14 +21,14 @@ import { useRef, useEffect, useState, memo } from "react";
  *   → Performa scrolling SANGAT halus
  */
 
-interface Column<T> {
+export interface Column<T> {
   key: string;
   header: string;
-  width?: string;
+  width?: string | number;
   render: (item: T, index: number) => React.ReactNode;
 }
 
-interface VirtualTableProps<T> {
+export interface VirtualTableProps<T> {
   data: T[];
   columns: Column<T>[];
   rowHeight?: number;
@@ -167,3 +167,5 @@ export function VirtualTable<T>({
     </div>
   );
 }
+
+export default VirtualTable;

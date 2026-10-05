@@ -59,16 +59,16 @@ export default function AdminPerpustakaan() {
   };
 
   const columns = [
-    { key: "id", header: "ID Buku", width: 300, render: (v: any) => <span className="font-mono text-[10px] text-zinc-500">{v}</span> },
-    { key: "judul", header: "Judul", width: 300, render: (v: any) => <span className="font-bold text-zinc-200">{v}</span> },
-    { key: "penulis", header: "Penulis", width: 200 },
-    { key: "stok", header: "Stok Tersedia", width: 120, render: (v: any) => <span className="font-bold text-blue-400">{v}</span> },
-    { key: "isbn", header: "ISBN", width: 150 },
+    { key: "id", header: "ID Buku", width: 220, render: (b: Buku) => <span className="font-mono text-[10px] text-zinc-500">{b.id}</span> },
+    { key: "judul", header: "Judul", width: 260, render: (b: Buku) => <span className="font-bold text-zinc-200">{b.judul}</span> },
+    { key: "penulis", header: "Penulis", width: 180, render: (b: Buku) => <span className="text-zinc-400 text-sm">{b.penulis}</span> },
+    { key: "stok", header: "Stok Tersedia", width: 120, render: (b: Buku) => <span className="font-bold text-blue-400">{b.stok}</span> },
+    { key: "isbn", header: "ISBN", width: 150, render: (b: Buku) => <span className="text-zinc-400 text-sm">{b.isbn || "-"}</span> },
     { 
       key: "actions", header: "Aksi", width: 150, 
-      render: (_: any, row: any) => (
+      render: (b: Buku) => (
         <button
-          onClick={() => handleReturn(row.id)}
+          onClick={() => handleReturn(b.id)}
           className="px-3 py-1 bg-zinc-800 text-xs font-bold rounded hover:bg-zinc-700 transition"
         >
           Proses Kembali
@@ -136,13 +136,14 @@ export default function AdminPerpustakaan() {
         </div>
       )}
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-md">
-        {loading ? (
-          <div className="p-8 text-center text-zinc-500 text-sm animate-pulse">Memuat inventori...</div>
-        ) : (
-          <VirtualTable data={buku} columns={columns} height={500} />
-        )}
-      </div>
+      <VirtualTable 
+        data={buku} 
+        columns={columns} 
+        getRowKey={(b) => b.id}
+        loading={loading}
+        maxHeight={500}
+        emptyMessage="Belum ada data inventori buku."
+      />
     </div>
   );
 }
