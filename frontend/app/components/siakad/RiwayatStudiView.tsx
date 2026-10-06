@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface RiwayatItem {
   id: string;
@@ -54,9 +54,17 @@ export function RiwayatStudiView({ user }: { user: any }) {
     { id: "t13", kode: "DT13ST13", mataKuliah: "Statistika", sks: 3, nilai: "AB", semester: "2024 / -", jenis: "Ekuivalensi" },
   ];
 
-  const totalSksDiambil = riwayatData.reduce((acc, curr) => acc + curr.sks, 0);
-  const totalSksDiakui = riwayatData.filter(i => i.masukTranskrip).reduce((acc, curr) => acc + curr.sks, 0);
-  const totalSksTransfer = transferData.reduce((acc, curr) => acc + curr.sks, 0);
+  // Single-pass memoized calculation (menggantikan 3 kali reduce & filter per render)
+  const { totalSksDiambil, totalSksDiakui, totalSksTransfer } = useMemo(() => {
+    let diambil = 0;
+    let diakui = 0;
+    for (const i of riwayatData) {
+      diambil += i.sks;
+      if (i.masukTranskrip) diakui += i.sks;
+    }
+    const transfer = transferData.reduce((acc, curr) => acc + curr.sks, 0);
+    return { totalSksDiambil: diambil, totalSksDiakui: diakui, totalSksTransfer: transfer };
+  }, []);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">

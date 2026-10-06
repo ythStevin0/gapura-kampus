@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { NavLink, useOutletContext } from "react-router";
+import { useDebounce } from "../../hooks/useOptimization";
 
 // ==========================================
 // DATA TYPES
@@ -475,7 +476,7 @@ function DosenApprovalView({ onBack, token }: { onBack: () => void; token: strin
             <p className="text-xs text-zinc-400 mb-6">Berikan masukan atau alasan mengapa karya ini perlu direvisi oleh mahasiswa.</p>
             
             <textarea
-              className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-zinc-300 focus:outline-none focus:border-rose-500/50 transition-all min-h-[120px] resize-none placeholder:text-zinc-600"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-zinc-300 focus:outline-none focus:border-rose-500/50 transition-all min-h-30 resize-none placeholder:text-zinc-600"
               placeholder="Ketik catatan revisi di sini..."
               value={revisiModal.reason}
               onChange={(e) => setRevisiModal({...revisiModal, reason: e.target.value})}
@@ -791,7 +792,7 @@ function ProjectCard({ project, onClick }: { project: Project; onClick: () => vo
 // ==========================================
 function FeaturedPanel({ project, onViewDetails }: { project: Project; onViewDetails: () => void }) {
   return (
-    <div className="relative h-full min-h-[600px] rounded-3xl overflow-hidden bg-zinc-900/60 border border-white/10 flex flex-col group cursor-pointer" onClick={onViewDetails}>
+    <div className="relative h-full min-h-150 rounded-3xl overflow-hidden bg-zinc-900/60 border border-white/10 flex flex-col group cursor-pointer" onClick={onViewDetails}>
       <div className="absolute inset-0">
         <img src={project.thumbnail} alt={project.title} className="w-full h-full object-cover opacity-30 transition-transform duration-700 group-hover:scale-105" />
         <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/60 to-black/20" />
@@ -888,11 +889,17 @@ export function MahakaryaView() {
   const displayedProjects = galleryProjects;
   const featuredProject = galleryProjects.length > 0 ? galleryProjects[0] : null;
 
-  const filtered = displayedProjects.filter((p) => {
-    const matchCat = activeCategory === "Semua" || p.category === activeCategory;
-    const matchSearch = searchQuery === "" || p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.author.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Single calculation: query di-lowercase 1x saja dan hanya dihitung ulang jika kategori/search/projects berubah
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return displayedProjects.filter((p) => {
+      const matchCat = activeCategory === "Semua" || p.category === activeCategory;
+      const matchSearch = !q || p.title.toLowerCase().includes(q) || p.author.toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [displayedProjects, activeCategory, debouncedSearch]);
 
   if (selectedProject) {
     return <DetailView project={selectedProject} onBack={() => setSelectedProject(null)} />;
@@ -977,7 +984,7 @@ export function MahakaryaView() {
 
       {/* === CONTENT GRID === */}
       <div className="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-8 px-8 pb-10">
-        <div className="xl:sticky xl:top-8 xl:self-start h-[600px]">
+        <div className="xl:sticky xl:top-8 xl:self-start h-150">
           {isGalleryLoading ? (
             <div className="w-full h-full rounded-3xl bg-white/5 animate-pulse border border-white/10" />
           ) : featuredProject ? (

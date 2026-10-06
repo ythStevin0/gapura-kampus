@@ -65,10 +65,16 @@ func (s *Service) GetTransaksi(ctx context.Context, mahasiswaID string) ([]model
 }
 
 func (s *Service) Checkout(ctx context.Context, mahasiswaID string, jenisTagihan string, amount float64, nama, email string) (*model.Transaksi, error) {
+	// Optimasi: Jangan panggil external service berulang kali jika sudah ada transaksi pending dengan token aktif
+	existing, err := s.repo.GetPendingTransaksiByBill(ctx, mahasiswaID, jenisTagihan)
+	if err == nil && existing != nil && existing.SnapToken != nil && *existing.SnapToken != "" {
+		return existing, nil
+	}
+
 	// Generate Order ID (TRX-UUID)
 	orderID := fmt.Sprintf("TRX-%s", uuid.New().String()[:8])
 
-	// Create Midtrans Snap Request
+	// Create Midtrans Snap Request (External Service)
 	req := &snap.Request{
 		TransactionDetails: midtrans.TransactionDetails{
 			OrderID:  orderID,

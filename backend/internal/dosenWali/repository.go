@@ -5,16 +5,18 @@ import (
 	"fmt"
 
 	"siakad/backend/internal/model"
+	"siakad/backend/pkg/cache"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
-	db *pgxpool.Pool
+	db    *pgxpool.Pool
+	cache *cache.Cache
 }
 
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *pgxpool.Pool, cache *cache.Cache) *Repository {
+	return &Repository{db: db, cache: cache}
 }
 
 // GetDosenByUserID mengambil profil dosen berdasarkan user ID (dari JWT)
@@ -165,6 +167,10 @@ func (r *Repository) ApproveKRS(ctx context.Context, krsID string, dosenID strin
 	if cmd.RowsAffected() == 0 {
 		return fmt.Errorf("krs tidak ditemukan, sudah diproses, atau bukan asuhan Anda")
 	}
+
+	if r.cache != nil {
+		r.cache.Invalidate(fmt.Sprintf("dosen:summary:%s", dosenID))
+	}
 	return nil
 }
 
@@ -183,6 +189,10 @@ func (r *Repository) RejectKRS(ctx context.Context, krsID string, dosenID string
 	if cmd.RowsAffected() == 0 {
 		return fmt.Errorf("krs tidak ditemukan, sudah diproses, atau bukan asuhan Anda")
 	}
+
+	if r.cache != nil {
+		r.cache.Invalidate(fmt.Sprintf("dosen:summary:%s", dosenID))
+	}
 	return nil
 }
 
@@ -198,6 +208,10 @@ func (r *Repository) ApproveAllKRS(ctx context.Context, mahasiswaID string, dose
 	if err != nil {
 		return 0, fmt.Errorf("failed to approve all krs: %w", err)
 	}
+
+	if r.cache != nil {
+		r.cache.Invalidate(fmt.Sprintf("dosen:summary:%s", dosenID))
+	}
 	return cmd.RowsAffected(), nil
 }
 
@@ -211,11 +225,22 @@ func (r *Repository) AssignDosenWali(ctx context.Context, mahasiswaID string, do
 	if cmd.RowsAffected() == 0 {
 		return fmt.Errorf("mahasiswa tidak ditemukan")
 	}
+
+	if r.cache != nil {
+		r.cache.Invalidate(fmt.Sprintf("dosen:summary:%s", dosenID))
+	}
 	return nil
 }
 
 // GetSummary mengambil ringkasan statistik untuk dashboard dosen
 func (r *Repository) GetSummary(ctx context.Context, dosenID string) (*DosenSummary, error) {
+	cacheKey := fmt.Sprintf("dosen:summary:%s", dosenID)
+	if r.cache != nil {
+		if cached, ok := r.cache.Get(cacheKey); ok {
+			return cached.(*DosenSummary), nil
+		}
+	}
+
 	query := `
 		SELECT
 			COUNT(DISTINCT m.id) as total_asuhan,
@@ -232,6 +257,10 @@ func (r *Repository) GetSummary(ctx context.Context, dosenID string) (*DosenSumm
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get summary: %w", err)
+	}
+
+	if r.cache != nil {
+		r.cache.Set(cacheKey, &s, cache.TTLMedium)
 	}
 	return &s, nil
 }

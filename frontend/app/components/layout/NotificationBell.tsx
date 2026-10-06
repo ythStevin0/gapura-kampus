@@ -32,7 +32,11 @@ export function NotificationBell({ setOtherDropdownOpen }: { setOtherDropdownOpe
     }
   };
 
-  const unreadCount = berita.filter(b => !readBeritaIds.includes(b.id)).length;
+  // Memoized unreadCount with O(1) Set lookup (menggantikan filter + includes berulang di setiap render)
+  const unreadCount = React.useMemo(() => {
+    const readSet = new Set(readBeritaIds);
+    return berita.filter(b => !readSet.has(b.id)).length;
+  }, [berita, readBeritaIds]);
 
   return (
     <div className="relative">
@@ -61,7 +65,7 @@ export function NotificationBell({ setOtherDropdownOpen }: { setOtherDropdownOpe
                 <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[8px] font-black">{unreadCount} BARU</span>
               )}
             </div>
-            <div className="max-h-[320px] overflow-y-auto">
+            <div className="max-h-80 overflow-y-auto">
               {berita.length === 0 ? (
                 <div className="p-8 text-center">
                   <p className="text-xs text-zinc-500 italic">Tidak ada pemberitahuan baru</p>

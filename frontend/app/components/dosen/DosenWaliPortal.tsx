@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router";
 
 const API_BASE = "http://localhost:8080";
@@ -151,7 +151,7 @@ export function DosenWaliPortal({ token }: { token: string }) {
   };
 
   const namaLengkap = dosen ? `${dosen.gelar_depan || ""} ${dosen.nama_lengkap} ${dosen.gelar_belakang || ""}`.trim() : "...";
-  const pendingKRS = krsList.filter(k => k.status === "pending");
+  const pendingKRS = useMemo(() => krsList.filter(k => k.status === "pending"), [krsList]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -367,7 +367,7 @@ export function DosenWaliPortal({ token }: { token: string }) {
                               <div className="flex flex-col items-center gap-1">
                                 {getStatusBadge(k.status)}
                                 {k.catatan && k.status === "ditolak" && (
-                                  <span className="text-[8px] text-red-400 italic max-w-[120px] text-center">{k.catatan}</span>
+                                  <span className="text-[8px] text-red-400 italic max-w-30 text-center">{k.catatan}</span>
                                 )}
                               </div>
                             </td>
