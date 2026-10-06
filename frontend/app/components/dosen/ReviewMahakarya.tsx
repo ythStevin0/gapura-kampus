@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useOutletContext } from "react-router";
 import {
   fetchMahakaryaToReview,
@@ -85,15 +85,33 @@ export default function ReviewMahakarya() {
     }
   };
 
-  const filteredSubmissions =
-    filter === "all" ? submissions : submissions.filter((s) => s.status === filter);
+  // Single-pass memoized calculation (menggantikan 4 perulangan .filter() terpisah)
+  const { filteredSubmissions, counts } = useMemo(() => {
+    let pending = 0;
+    let approved = 0;
+    let rejected = 0;
+    const filtered: MahakaryaSubmission[] = [];
 
-  const counts = {
-    all: submissions.length,
-    pending: submissions.filter((s) => s.status === "pending").length,
-    approved: submissions.filter((s) => s.status === "approved").length,
-    rejected: submissions.filter((s) => s.status === "rejected").length,
-  };
+    for (const s of submissions) {
+      if (s.status === "pending") pending++;
+      else if (s.status === "approved") approved++;
+      else if (s.status === "rejected") rejected++;
+
+      if (filter === "all" || s.status === filter) {
+        filtered.push(s);
+      }
+    }
+
+    return {
+      filteredSubmissions: filtered,
+      counts: {
+        all: submissions.length,
+        pending,
+        approved,
+        rejected,
+      },
+    };
+  }, [submissions, filter]);
 
   const getStatusBadge = (status: string) => {
     if (status === "approved")

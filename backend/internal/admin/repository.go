@@ -3,7 +3,6 @@ package admin
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"siakad/backend/internal/model"
 	"siakad/backend/pkg/cache"
@@ -39,33 +38,22 @@ func (r *Repository) GetStats(ctx context.Context) (map[string]int64, error) {
 		return cached.(map[string]int64), nil
 	}
 
-	stats := make(map[string]int64)
-	var mu sync.Mutex
-
-	queries := map[string]string{
-		"total_mahasiswa": "SELECT COUNT(*) FROM mahasiswa",
-		"total_dosen":     "SELECT COUNT(*) FROM dosen",
-		"total_matkul":    "SELECT COUNT(*) FROM mata_kuliah",
+	// Single query menggabungkan 3 hitungan (menghindari DB call in a loop)
+	query := `
+		SELECT 
+			(SELECT COUNT(*) FROM mahasiswa) AS total_mahasiswa,
+			(SELECT COUNT(*) FROM dosen) AS total_dosen,
+			(SELECT COUNT(*) FROM mata_kuliah) AS total_matkul
+	`
+	var totalMahasiswa, totalDosen, totalMatkul int64
+	if err := r.db.QueryRow(ctx, query).Scan(&totalMahasiswa, &totalDosen, &totalMatkul); err != nil {
+		return nil, fmt.Errorf("failed to get admin stats: %w", err)
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
-
-	for key, q := range queries {
-		k, query := key, q
-		g.Go(func() error {
-			var count int64
-			if err := r.db.QueryRow(ctx, query).Scan(&count); err != nil {
-				return fmt.Errorf("failed to count %s: %w", k, err)
-			}
-			mu.Lock()
-			stats[k] = count
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+	stats := map[string]int64{
+		"total_mahasiswa": totalMahasiswa,
+		"total_dosen":     totalDosen,
+		"total_matkul":    totalMatkul,
 	}
 
 	// Simpan ke cache selama 2 menit

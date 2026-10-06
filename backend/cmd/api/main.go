@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -77,7 +78,7 @@ func main() {
 	mahasiswaHandler := mahasiswa.NewHandler(mahasiswaService, logger)
 
 	// Dosen Wali
-	dosenWaliRepo := dosenWali.NewRepository(db)
+	dosenWaliRepo := dosenWali.NewRepository(db, appCache)
 	dosenWaliService := dosenWali.NewService(dosenWaliRepo)
 	dosenWaliHandler := dosenWali.NewHandler(dosenWaliService, logger)
 
@@ -101,7 +102,7 @@ func main() {
 	// Admin Handler
 	adminHandler := admin.NewHandler(adminService, logger)
 
-	beritaRepo := berita.NewRepository(db)
+	beritaRepo := berita.NewRepository(db, appCache)
 	beritaService := berita.NewService(beritaRepo)
 	beritaHandler := berita.NewHandler(beritaService, logger)
 
@@ -118,7 +119,7 @@ func main() {
 	paymentService := payment.NewService(paymentRepo)
 	paymentHandler := payment.NewHandler(paymentService, mahasiswaRepo, logger)
 
-	perpustakaanRepo := perpustakaan.NewRepository(db)
+	perpustakaanRepo := perpustakaan.NewRepository(db, appCache)
 	perpustakaanService := perpustakaan.NewService(perpustakaanRepo)
 	perpustakaanHandler := perpustakaan.NewHandler(perpustakaanService, logger)
 
@@ -130,11 +131,13 @@ func main() {
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
+		ExposedHeaders:   []string{"Link", "Server-Timing", "X-Response-Time"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
+	// Profiler & Stopwatch Timer Middleware (Milan Jovanovic Performance Monitoring)
+	r.Use(middleware.RequestTimerMiddleware(logger, 150*time.Millisecond))
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 

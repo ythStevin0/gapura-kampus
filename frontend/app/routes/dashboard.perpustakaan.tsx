@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { fetchAllBuku, pinjamBuku, fetchPeminjamanSaya, createBukuAdmin, kembalikanBukuAdmin, type Buku, type PeminjamanBuku } from "../lib/api";
 import { useOutletContext } from "react-router";
+import { useDebounce } from "../hooks/useOptimization";
 
 export default function DashboardPerpustakaan() {
   const { user } = useOutletContext<{ user: any }>();
@@ -80,9 +81,16 @@ export default function DashboardPerpustakaan() {
     }
   };
 
-  const filteredKatalog = katalog.filter(
-    (b) => b.judul.toLowerCase().includes(search.toLowerCase()) || b.penulis.toLowerCase().includes(search.toLowerCase())
-  );
+  const debouncedSearch = useDebounce(search, 300);
+
+  // Single calculation: query diubah toLowerCase() 1x saja dan hanya dihitung ulang jika search/katalog berubah
+  const filteredKatalog = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return katalog;
+    return katalog.filter(
+      (b) => b.judul.toLowerCase().includes(q) || b.penulis.toLowerCase().includes(q)
+    );
+  }, [katalog, debouncedSearch]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">

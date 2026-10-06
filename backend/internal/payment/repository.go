@@ -77,3 +77,23 @@ func (r *Repository) UpdateStatusKeuanganMahasiswa(ctx context.Context, orderID 
 	_, err := r.db.Exec(ctx, query, orderID)
 	return err
 }
+
+// GetPendingTransaksiByBill mencari transaksi pending yang masih memiliki snap_token aktif untuk tagihan mahasiswa
+func (r *Repository) GetPendingTransaksiByBill(ctx context.Context, mahasiswaID string, jenisTagihan string) (*model.Transaksi, error) {
+	query := `
+		SELECT id, mahasiswa_id, order_id, jenis_tagihan, jumlah, status, metode_pembayaran, snap_token, created_at, updated_at
+		FROM transaksi 
+		WHERE mahasiswa_id = $1 AND jenis_tagihan = $2 AND status = 'pending' AND snap_token IS NOT NULL
+		ORDER BY created_at DESC 
+		LIMIT 1
+	`
+	var t model.Transaksi
+	err := r.db.QueryRow(ctx, query, mahasiswaID, jenisTagihan).Scan(
+		&t.ID, &t.MahasiswaID, &t.OrderID, &t.JenisTagihan, &t.Jumlah, 
+		&t.Status, &t.MetodePembayaran, &t.SnapToken, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}

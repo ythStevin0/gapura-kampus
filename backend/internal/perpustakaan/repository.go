@@ -6,16 +6,18 @@ import (
 	"time"
 
 	"siakad/backend/internal/model"
+	"siakad/backend/pkg/cache"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
-	db *pgxpool.Pool
+	db    *pgxpool.Pool
+	cache *cache.Cache
 }
 
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *pgxpool.Pool, cache *cache.Cache) *Repository {
+	return &Repository{db: db, cache: cache}
 }
 
 // -----------------------------------------------------
@@ -23,6 +25,13 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 // -----------------------------------------------------
 
 func (r *Repository) GetAllBuku(ctx context.Context) ([]model.Buku, error) {
+	const cacheKey = "perpustakaan:buku:all"
+	if r.cache != nil {
+		if cached, ok := r.cache.Get(cacheKey); ok {
+			return cached.([]model.Buku), nil
+		}
+	}
+
 	query := `SELECT id, judul, penulis, penerbit, tahun_terbit, isbn, stok, cover_url, created_at, updated_at FROM buku ORDER BY judul ASC`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
@@ -38,6 +47,11 @@ func (r *Repository) GetAllBuku(ctx context.Context) ([]model.Buku, error) {
 		}
 		list = append(list, b)
 	}
+
+	if r.cache != nil {
+		r.cache.Set(cacheKey, list, cache.TTLLong)
+	}
+
 	return list, nil
 }
 
@@ -47,9 +61,17 @@ func (r *Repository) CreateBuku(ctx context.Context, b *model.Buku) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRow(ctx, query,
+	err := r.db.QueryRow(ctx, query,
 		b.Judul, b.Penulis, b.Penerbit, b.TahunTerbit, b.ISBN, b.Stok, b.CoverURL,
 	).Scan(&b.ID, &b.CreatedAt, &b.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	if r.cache != nil {
+		r.cache.Invalidate("perpustakaan:buku:all")
+	}
+	return nil
 }
 
 func (r *Repository) GetBukuByID(ctx context.Context, id string) (*model.Buku, error) {
@@ -107,9 +129,13 @@ func (r *Repository) CreatePeminjaman(ctx context.Context, p *model.PeminjamanBu
 	
 	p.TanggalPinjam = tglPinjam.Format("2006-01-02")
 	p.TenggatWaktu = tenggat
-	p.Status = "Dipinjam"
-
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	if r.cache != nil {
+		r.cache.Invalidate("perpustakaan:buku:all")
+	}
+	return nil
 }
 
 func (r *Repository) GetPeminjamanByUser(ctx context.Context, userID string) ([]model.PeminjamanBuku, error) {
@@ -185,5 +211,11 @@ func (r *Repository) KembalikanBuku(ctx context.Context, peminjamanID string) er
 		return err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	if r.cache != nil {
+		r.cache.Invalidate("perpustakaan:buku:all")
+	}
+	return nil
 }

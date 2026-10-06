@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { fetchTagihan, fetchTransaksi, checkoutPayment, type Tagihan, type Transaksi } from "../../lib/api";
 
 declare global {
@@ -6,6 +6,14 @@ declare global {
     snap: any;
   }
 }
+
+// Format currency diinisialisasi 1x saja di level module (menghindari instansiasi berulang di setiap render)
+const currencyFormatter = new Intl.NumberFormat("id-ID", {
+  style: "currency",
+  currency: "IDR",
+  minimumFractionDigits: 0,
+});
+const formatCurrency = (amount: number) => currencyFormatter.format(amount);
 
 export default function UISIPayUI() {
   const [bills, setBills] = useState<Tagihan[]>([]);
@@ -76,17 +84,10 @@ export default function UISIPayUI() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const totalUnpaid = bills
-    .filter((b) => b.status === "Belum Bayar")
-    .reduce((acc, curr) => acc + curr.amount, 0);
+  // Single-pass memoized calculation: hanya dihitung 1x saat bills berubah
+  const totalUnpaid = useMemo(() => {
+    return bills.reduce((acc, curr) => (curr.status === "Belum Bayar" ? acc + curr.amount : acc), 0);
+  }, [bills]);
 
   if (loading) {
     return <div className="text-zinc-500 animate-pulse text-sm">Memuat data pembayaran...</div>;

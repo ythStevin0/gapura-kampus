@@ -11,6 +11,7 @@ import (
 	"siakad/backend/internal/model"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -149,21 +150,34 @@ func (s *Service) GetProfilKRS(ctx context.Context, userID uuid.UUID) (*ProfilKR
 		_ = s.repo.GetAutoDosenWali(ctx, mhs.ID.String(), mhs.ProgramStudi)
 	}
 
-	// Ambil profil dasar dari database (sudah include nama dosen wali dari JOIN)
-	profil, err := s.repo.GetProfilKRS(ctx, mhs.ID.String())
-	if err != nil {
+	// Hitung semester sekarang berdasarkan angkatan
+	semesterSekarang, semesterAkademik, semesterSebelumnya := hitungSemester(mhs.Angkatan)
+
+	// Eksekusi bersamaan (Concurrent Execution):
+	// Mengambil Profil Dasar dan IPS Semester Lalu secara paralel untuk memangkas waktu tunggu I/O
+	g, gCtx := errgroup.WithContext(ctx)
+
+	var profil *ProfilKRS
+	var ips float64
+
+	g.Go(func() error {
+		var errP error
+		profil, errP = s.repo.GetProfilKRS(gCtx, mhs.ID.String())
+		return errP
+	})
+
+	g.Go(func() error {
+		ips = s.repo.GetIPSSemesterLalu(gCtx, mhs.ID.String(), semesterSebelumnya)
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	// Hitung semester sekarang berdasarkan angkatan
-	semesterSekarang, semesterAkademik, semesterSebelumnya := hitungSemester(mhs.Angkatan)
 	profil.SemesterSekarang = semesterSekarang
 	profil.SemesterAkademik = semesterAkademik
-
-	// Ambil IPS semester lalu
-	profil.IPSSemesterLalu = s.repo.GetIPSSemesterLalu(ctx, mhs.ID.String(), semesterSebelumnya)
-
-	// Hitung max SKS berdasarkan IPS dan angkatan
+	profil.IPSSemesterLalu = ips
 	profil.MaxSKS = hitungMaxSKS(semesterSekarang, profil.IPSSemesterLalu, mhs.IzinKRS)
 
 	return profil, nil
