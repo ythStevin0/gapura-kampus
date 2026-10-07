@@ -116,7 +116,12 @@ func main() {
 	kelasHandler := kelas.NewHandler(kelasService, logger)
 
 	paymentRepo := payment.NewRepository(db)
-	paymentService := payment.NewService(paymentRepo)
+	paymentService := payment.NewService(
+		paymentRepo,
+		os.Getenv("MIDTRANS_SERVER_KEY"),
+		os.Getenv("MIDTRANS_CLIENT_KEY"),
+		os.Getenv("MIDTRANS_IS_PRODUCTION") == "true",
+	)
 	paymentHandler := payment.NewHandler(paymentService, mahasiswaRepo, logger)
 
 	perpustakaanRepo := perpustakaan.NewRepository(db, appCache)
@@ -281,13 +286,17 @@ func main() {
 
 	// 13. Route Payment
 	r.Route("/api/payment", func(r chi.Router) {
-		r.Post("/webhook", paymentHandler.Webhook) // Midtrans webhook
+		r.Get("/config", paymentHandler.GetConfig) // Public Midtrans config (Client Key & Snap URL)
+		r.Post("/webhook", paymentHandler.Webhook) // Midtrans webhook (Signature verified)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(os.Getenv("JWT_SECRET"), logger))
 			r.Use(middleware.RequireRole("mahasiswa"))
 			r.Get("/tagihan", paymentHandler.GetTagihan)
 			r.Get("/transaksi", paymentHandler.GetTransaksi)
+			r.Get("/active-pending", paymentHandler.GetActivePending)
 			r.Post("/checkout", paymentHandler.Checkout)
+			r.Post("/sync/{order_id}", paymentHandler.Sync)
+			r.Post("/cancel/{order_id}", paymentHandler.Cancel)
 		})
 	})
 
