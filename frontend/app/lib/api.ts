@@ -388,7 +388,26 @@ export interface Transaksi {
   status: string;
   metode_pembayaran?: string;
   snap_token?: string;
+  va_number?: string;
+  bank?: string;
+  bill_key?: string;
+  biller_code?: string;
+  payment_type?: string;
+  expiry_time?: string;
+  settlement_time?: string;
+  pdf_url?: string;
   created_at: string;
+}
+
+export interface PaymentConfig {
+  client_key: string;
+  is_production: boolean;
+  snap_url: string;
+}
+
+export async function fetchPaymentConfig(): Promise<PaymentConfig> {
+  const res = await apiFetch("/api/payment/config");
+  return res.data;
 }
 
 export async function fetchTagihan(): Promise<Tagihan[]> {
@@ -401,10 +420,29 @@ export async function fetchTransaksi(): Promise<Transaksi[]> {
   return res.data || [];
 }
 
+export async function fetchActivePendingTransaksi(): Promise<Transaksi | null> {
+  const res = await apiFetch("/api/payment/active-pending");
+  return res.data || null;
+}
+
 export async function checkoutPayment(jenis_tagihan: string, amount: number): Promise<Transaksi> {
   const res = await apiFetch("/api/payment/checkout", {
     method: "POST",
     body: JSON.stringify({ jenis_tagihan, amount }),
+  });
+  return res.data;
+}
+
+export async function syncPaymentStatus(orderId: string): Promise<Transaksi> {
+  const res = await apiFetch(`/api/payment/sync/${orderId}`, {
+    method: "POST",
+  });
+  return res.data;
+}
+
+export async function cancelPayment(orderId: string): Promise<Transaksi> {
+  const res = await apiFetch(`/api/payment/cancel/${orderId}`, {
+    method: "POST",
   });
   return res.data;
 }

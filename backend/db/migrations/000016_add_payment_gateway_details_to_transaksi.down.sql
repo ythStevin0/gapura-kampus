@@ -1,0 +1,9 @@
+ALTER TABLE transaksi
+DROP COLUMN IF EXISTS pdf_url,
+DROP COLUMN IF EXISTS settlement_time,
+DROP COLUMN IF EXISTS expiry_time,
+DROP COLUMN IF EXISTS payment_type,
+DROP COLUMN IF EXISTS biller_code,
+DROP COLUMN IF EXISTS bill_key,
+DROP COLUMN IF EXISTS bank,
+DROP COLUMN IF EXISTS va_number;
