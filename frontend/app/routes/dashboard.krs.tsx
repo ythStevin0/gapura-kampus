@@ -53,7 +53,6 @@ export default function SIAKADContainer() {
     return (
       <div className="relative pt-4">
         <DosenWaliPortal token={authToken} />
-        <DosenWaliPortal token={authToken} />
       </div>
     );
   }

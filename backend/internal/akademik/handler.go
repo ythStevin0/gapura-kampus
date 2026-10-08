@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"siakad/backend/internal/middleware"
+	"siakad/backend/internal/model"
 	"siakad/backend/pkg/response"
 
 	"github.com/go-chi/chi/v5"
@@ -121,4 +122,106 @@ func (h *Handler) DropKelas(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, http.StatusOK, "Mata kuliah berhasil dibatalkan dari KRS", nil)
+}
+
+// GetKHS handles GET /api/akademik/khs?semester=...
+func (h *Handler) GetKHS(w http.ResponseWriter, r *http.Request) {
+	userCtx := middleware.GetUserFromContext(r.Context())
+	semester := r.URL.Query().Get("semester")
+
+	userID, _ := uuid.Parse(userCtx.UserID)
+	khs, err := h.service.GetKHS(r.Context(), userID, semester)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mengambil data KHS", err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "Data KHS berhasil diambil", khs)
+}
+
+// GetTranskrip handles GET /api/akademik/transkrip
+func (h *Handler) GetTranskrip(w http.ResponseWriter, r *http.Request) {
+	userCtx := middleware.GetUserFromContext(r.Context())
+	userID, _ := uuid.Parse(userCtx.UserID)
+
+	transkrip, err := h.service.GetTranskrip(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mengambil transkrip nilai", err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "Transkrip nilai berhasil diambil", transkrip)
+}
+
+// GetSemesters handles GET /api/akademik/semesters
+func (h *Handler) GetSemesters(w http.ResponseWriter, r *http.Request) {
+	userCtx := middleware.GetUserFromContext(r.Context())
+	userID, _ := uuid.Parse(userCtx.UserID)
+
+	semesters, err := h.service.GetSemesters(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mengambil daftar semester", err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "Daftar semester berhasil diambil", semesters)
+}
+
+// GetMahasiswaNilaiByKelas handles GET /api/dosen/kelas/{id}/nilai
+func (h *Handler) GetMahasiswaNilaiByKelas(w http.ResponseWriter, r *http.Request) {
+	kelasID := chi.URLParam(r, "id")
+	if kelasID == "" {
+		response.Error(w, http.StatusBadRequest, "ID kelas wajib diisi", "")
+		return
+	}
+
+	list, err := h.service.GetMahasiswaNilaiByKelas(r.Context(), kelasID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mengambil nilai mahasiswa kelas", err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "Daftar nilai mahasiswa kelas berhasil diambil", list)
+}
+
+// InputNilaiKelas handles POST /api/dosen/kelas/nilai
+func (h *Handler) InputNilaiKelas(w http.ResponseWriter, r *http.Request) {
+	var req model.InputNilaiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Format JSON request tidak valid", err.Error())
+		return
+	}
+
+	if req.KelasID == "" {
+		response.Error(w, http.StatusBadRequest, "kelas_id wajib diisi", "")
+		return
+	}
+
+	if err := h.service.InputNilaiKelas(r.Context(), req); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal menyimpan nilai", err.Error())
+		return
+	}
+
+	pesan := "Nilai berhasil disimpan sebagai draft"
+	if req.Publish {
+		pesan = "Nilai berhasil disimpan dan dipublikasikan ke mahasiswa"
+	}
+
+	response.Success(w, http.StatusOK, pesan, nil)
+}
+
+// PublishNilaiKelas handles POST /api/dosen/kelas/{id}/publish-nilai
+func (h *Handler) PublishNilaiKelas(w http.ResponseWriter, r *http.Request) {
+	kelasID := chi.URLParam(r, "id")
+	if kelasID == "" {
+		response.Error(w, http.StatusBadRequest, "ID kelas wajib diisi", "")
+		return
+	}
+
+	if err := h.service.PublishNilaiKelas(r.Context(), kelasID); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Gagal mempublikasikan nilai kelas", err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "Semua nilai kelas berhasil dipublikasikan", nil)
 }
