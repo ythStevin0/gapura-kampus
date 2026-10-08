@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS idx_krs_status_nilai;
+
+ALTER TABLE krs
+DROP COLUMN IF EXISTS status_nilai,
+DROP COLUMN IF EXISTS bobot,
+DROP COLUMN IF EXISTS nilai_huruf,
+DROP COLUMN IF EXISTS nilai_akhir,
+DROP COLUMN IF EXISTS nilai_uas,
+DROP COLUMN IF EXISTS nilai_uts,
+DROP COLUMN IF EXISTS nilai_tugas;

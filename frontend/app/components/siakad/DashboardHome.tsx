@@ -23,8 +23,8 @@ export function DashboardHome({ user, myKRS }: DashboardHomeProps) {
     dosenWali: profil?.nama_dosen_wali || "...",
     semesterAktif: profil?.semester_akademik || "...",
     semesterKe: profil?.semester_sekarang ?? 0,
-    ipk: 3.28,
-    totalSks: 56,
+    ipk: profil?.ipk ?? 0,
+    totalSks: profil?.total_sks_kumulatif ?? 0,
     frsDiSetujui: { mk: myKRS.length, sks: myKRS.reduce((a, b) => a + b.sks, 0) },
     kuesioner: "Sudah Diisi / Tidak Wajib"
   };
@@ -108,10 +108,10 @@ export function DashboardHome({ user, myKRS }: DashboardHomeProps) {
           </div>
 
           <div className="flex flex-col gap-3 shrink-0">
-            <button className="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-xs font-black text-zinc-100 uppercase tracking-widest hover:bg-white/10 hover:border-white/20 transition-all flex items-center justify-center gap-3 group">
+            <a href="?view=transkrip" className="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-xs font-black text-zinc-100 uppercase tracking-widest hover:bg-white/10 hover:border-white/20 transition-all flex items-center justify-center gap-3 group">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-zinc-500 group-hover:text-white transition-colors"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14.5 2 14.5 7.5 20 7.5"/></svg>
               Transkrip Nilai
-            </button>
+            </a>
             <a href="?view=form" className="px-8 py-3 rounded-2xl bg-[#1ea39e] hover:bg-[#17888a] text-xs font-black text-white uppercase tracking-widest shadow-xl shadow-[#1ea39e]/20 transition-all flex items-center justify-center gap-3 group">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="transition-transform group-hover:rotate-12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Pengisian FRS
@@ -122,10 +122,10 @@ export function DashboardHome({ user, myKRS }: DashboardHomeProps) {
 
       {/* Stat Cards Grid - Updated colors to be more vibrant */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="IPK Kumulatif" value={dataMahasiswa.ipk} color="bg-emerald-500" icon={<path d="M12 20v-6M6 20V10M18 20V4"/>} link="LIHAT TRANSKRIP" shadow="shadow-emerald-500/20" />
-        <StatCard label="Total SKS Diambil & Diakui" value={dataMahasiswa.totalSks} color="bg-blue-500" icon={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} link="LIHAT TRANSKRIP" shadow="shadow-blue-500/20" />
-        <StatCard label={`${dataMahasiswa.frsDiSetujui.mk} MK · ${dataMahasiswa.frsDiSetujui.sks} SKS`} value="FRS Disetujui" color="bg-rose-500" icon={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} link="LIHAT FRS" shadow="shadow-rose-500/20" />
-        <StatCard label={dataMahasiswa.kuesioner} value="Kuesioner" color="bg-violet-500" icon={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>} link="LIHAT KUESIONER" shadow="shadow-violet-500/20" />
+        <StatCard label="IPK Kumulatif" value={dataMahasiswa.ipk > 0 ? dataMahasiswa.ipk.toFixed(2) : "0.00"} color="bg-emerald-500" icon={<path d="M12 20v-6M6 20V10M18 20V4"/>} link="LIHAT TRANSKRIP" shadow="shadow-emerald-500/20" href="?view=transkrip" />
+        <StatCard label="Total SKS Diambil & Diakui" value={dataMahasiswa.totalSks} color="bg-blue-500" icon={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} link="LIHAT TRANSKRIP" shadow="shadow-blue-500/20" href="?view=transkrip" />
+        <StatCard label={`${dataMahasiswa.frsDiSetujui.mk} MK · ${dataMahasiswa.frsDiSetujui.sks} SKS`} value="FRS Disetujui" color="bg-rose-500" icon={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} link="LIHAT FRS" shadow="shadow-rose-500/20" href="?view=form" />
+        <StatCard label={dataMahasiswa.kuesioner} value="Kuesioner" color="bg-violet-500" icon={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>} link="LIHAT KUESIONER" shadow="shadow-violet-500/20" href="?view=kuesioner" />
       </div>
 
       {/* Table Section - Premium Masterpiece Style */}

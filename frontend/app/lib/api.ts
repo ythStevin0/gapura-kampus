@@ -285,6 +285,15 @@ export interface KRS {
   kelas_id: string;
   semester_akademik: string;
   status: "pending" | "disetujui" | "ditolak";
+  catatan?: string;
+  nilai_tugas?: number;
+  nilai_uts?: number;
+  nilai_uas?: number;
+  nilai_akhir?: number;
+  nilai_huruf?: string;
+  bobot?: number;
+  status_nilai?: string;
+  kode_mk?: string;
   nama_mata_kuliah: string;
   kode_kelas: string;
   sks: number;
@@ -327,6 +336,9 @@ export interface ProfilKRS {
   semester_sekarang: number;
   semester_akademik: string;
   ips_semester_lalu: number;
+  total_sks_kumulatif: number;
+  total_sks_lulus: number;
+  ipk: number;
   nama_dosen_wali: string;
   max_sks: number;
   status_ukt: boolean;
@@ -337,6 +349,130 @@ export interface ProfilKRS {
 export async function fetchProfilKRS(): Promise<ProfilKRS> {
   const res = await apiFetch("/api/akademik/profil-krs");
   return res.data as ProfilKRS;
+}
+
+// =============================================
+// KHS, TRANSKRIP, & PENILAIAN AKADEMIK
+// =============================================
+export interface KHSItem {
+  krs_id: string;
+  kode_mk: string;
+  nama_mk: string;
+  kode_kelas: string;
+  sks: number;
+  nilai_tugas?: number;
+  nilai_uts?: number;
+  nilai_uas?: number;
+  nilai_akhir?: number;
+  nilai_huruf: string;
+  bobot: number;
+  total_sks_bobot: number;
+  status_nilai: string;
+}
+
+export interface KHSResponse {
+  nim: string;
+  nama_lengkap: string;
+  program_studi: string;
+  semester_akademik: string;
+  items: KHSItem[];
+  total_sks_semester: number;
+  total_bobot_semester: number;
+  ips: number;
+  total_sks_kumulatif: number;
+  ipk: number;
+  max_sks_depan: number;
+}
+
+export interface TranskripItem {
+  kode_mk: string;
+  nama_mk: string;
+  sks: number;
+  nilai_huruf: string;
+  bobot: number;
+  total_bobot: number;
+  semester_akademik: string;
+  lulus: boolean;
+}
+
+export interface TranskripSemester {
+  semester_akademik: string;
+  items: TranskripItem[];
+  total_sks: number;
+  ips: number;
+}
+
+export interface TranskripResponse {
+  nim: string;
+  nama_lengkap: string;
+  program_studi: string;
+  semesters: TranskripSemester[];
+  total_sks_tempuh: number;
+  total_sks_lulus: number;
+  total_bobot: number;
+  ipk: number;
+}
+
+export async function fetchKHS(semester?: string): Promise<KHSResponse> {
+  const url = semester ? `/api/akademik/khs?semester=${encodeURIComponent(semester)}` : "/api/akademik/khs";
+  const res = await apiFetch(url);
+  return res.data as KHSResponse;
+}
+
+export async function fetchTranskrip(): Promise<TranskripResponse> {
+  const res = await apiFetch("/api/akademik/transkrip");
+  return res.data as TranskripResponse;
+}
+
+export async function fetchAcademicSemesters(): Promise<string[]> {
+  const res = await apiFetch("/api/akademik/semesters");
+  return (res.data as string[]) || [];
+}
+
+// Penilaian Dosen Pengajar
+export interface MahasiswaNilaiKelasItem {
+  krs_id: string;
+  mahasiswa_id: string;
+  nim: string;
+  nama_lengkap: string;
+  nilai_tugas?: number;
+  nilai_uts?: number;
+  nilai_uas?: number;
+  nilai_akhir?: number;
+  nilai_huruf?: string;
+  bobot?: number;
+  status_nilai: string;
+}
+
+export interface InputNilaiItem {
+  krs_id: string;
+  nilai_tugas: number;
+  nilai_uts: number;
+  nilai_uas: number;
+}
+
+export interface InputNilaiRequest {
+  kelas_id: string;
+  nilai: InputNilaiItem[];
+  publish: boolean;
+}
+
+export async function fetchMahasiswaNilaiKelas(kelasId: string): Promise<MahasiswaNilaiKelasItem[]> {
+  const res = await apiFetch(`/api/dosen/kelas/${kelasId}/nilai`);
+  return (res.data as MahasiswaNilaiKelasItem[]) || [];
+}
+
+export async function inputNilaiKelas(payload: InputNilaiRequest): Promise<void> {
+  await apiFetch("/api/dosen/kelas/nilai", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function publishNilaiKelas(kelasId: string): Promise<void> {
+  await apiFetch(`/api/dosen/kelas/${kelasId}/publish-nilai`, {
+    method: "POST",
+  });
 }
 
 

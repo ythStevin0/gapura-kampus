@@ -1,5 +1,13 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router";
+import { 
+  fetchAvailableKelas, 
+  fetchMahasiswaNilaiKelas, 
+  inputNilaiKelas, 
+  type Kelas, 
+  type MahasiswaNilaiKelasItem, 
+  type InputNilaiRequest 
+} from "../../lib/api";
 
 const API_BASE = "http://localhost:8080";
 
@@ -43,8 +51,22 @@ interface DosenInfo {
   gelar_belakang?: string;
 }
 
+function hitungNilaiPreview(tugas: number, uts: number, uas: number) {
+  const akhir = (0.30 * tugas) + (0.35 * uts) + (0.35 * uas);
+  let huruf = "E";
+  let bobot = 0.0;
+  if (akhir >= 85) { huruf = "A"; bobot = 4.0; }
+  else if (akhir >= 75) { huruf = "AB"; bobot = 3.5; }
+  else if (akhir >= 65) { huruf = "B"; bobot = 3.0; }
+  else if (akhir >= 60) { huruf = "BC"; bobot = 2.5; }
+  else if (akhir >= 55) { huruf = "C"; bobot = 2.0; }
+  else if (akhir >= 40) { huruf = "D"; bobot = 1.0; }
+  else { huruf = "E"; bobot = 0.0; }
+  return { akhir, huruf, bobot };
+}
+
 export function DosenWaliPortal({ token }: { token: string }) {
-  const [view, setView] = React.useState<"dashboard" | "persetujuan">("dashboard");
+  const [view, setView] = React.useState<"dashboard" | "persetujuan" | "nilai">("dashboard");
   const [summary, setSummary] = React.useState<DosenSummary | null>(null);
   const [dosen, setDosen] = React.useState<DosenInfo | null>(null);
   const [mahasiswaList, setMahasiswaList] = React.useState<MahasiswaAsuhan[]>([]);
@@ -57,9 +79,17 @@ export function DosenWaliPortal({ token }: { token: string }) {
   const [toast, setToast] = React.useState<{ type: "success" | "error"; msg: string } | null>(null);
   const navigate = useNavigate();
 
+  // State untuk Input Nilai Kelas
+  const [kelasList, setKelasList] = React.useState<Kelas[]>([]);
+  const [selectedKelas, setSelectedKelas] = React.useState<Kelas | null>(null);
+  const [mahasiswaNilaiList, setMahasiswaNilaiList] = React.useState<MahasiswaNilaiKelasItem[]>([]);
+  const [nilaiInputs, setNilaiInputs] = React.useState<Record<string, { tugas: number; uts: number; uas: number }>>({});
+  const [savingNilai, setSavingNilai] = React.useState(false);
+  const [loadingNilai, setLoadingNilai] = React.useState(false);
+
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const authHeaders = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
@@ -76,6 +106,82 @@ export function DosenWaliPortal({ token }: { token: string }) {
       if (mhsRes.success) setMahasiswaList(mhsRes.data || []);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
+
+  // Fetch kelas saat tab nilai diaktifkan
+  React.useEffect(() => {
+    if (view === "nilai" && kelasList.length === 0) {
+      fetchAvailableKelas()
+        .then(k => {
+          setKelasList(k || []);
+          if (k && k.length > 0 && !selectedKelas) {
+            handleSelectKelas(k[0]);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [view]);
+
+  const handleSelectKelas = (k: Kelas) => {
+    setSelectedKelas(k);
+    setLoadingNilai(true);
+    fetchMahasiswaNilaiKelas(k.id)
+      .then(items => {
+        setMahasiswaNilaiList(items || []);
+        const inps: Record<string, { tugas: number; uts: number; uas: number }> = {};
+        for (const item of items) {
+          inps[item.krs_id] = {
+            tugas: item.nilai_tugas ?? 0,
+            uts: item.nilai_uts ?? 0,
+            uas: item.nilai_uas ?? 0,
+          };
+        }
+        setNilaiInputs(inps);
+      })
+      .catch(err => {
+        showToast("error", err.message || "Gagal memuat peserta kelas");
+      })
+      .finally(() => {
+        setLoadingNilai(false);
+      });
+  };
+
+  const handleInputChange = (krsId: string, field: "tugas" | "uts" | "uas", valStr: string) => {
+    const num = Math.min(100, Math.max(0, parseFloat(valStr) || 0));
+    setNilaiInputs(prev => ({
+      ...prev,
+      [krsId]: {
+        ...(prev[krsId] || { tugas: 0, uts: 0, uas: 0 }),
+        [field]: num,
+      }
+    }));
+  };
+
+  const handleSaveNilai = async (publish: boolean) => {
+    if (!selectedKelas) return;
+    setSavingNilai(true);
+    try {
+      const payload: InputNilaiRequest = {
+        kelas_id: selectedKelas.id,
+        publish: publish,
+        nilai: mahasiswaNilaiList.map(m => {
+          const inp = nilaiInputs[m.krs_id] || { tugas: 0, uts: 0, uas: 0 };
+          return {
+            krs_id: m.krs_id,
+            nilai_tugas: inp.tugas,
+            nilai_uts: inp.uts,
+            nilai_uas: inp.uas,
+          };
+        }),
+      };
+      await inputNilaiKelas(payload);
+      showToast("success", publish ? "Nilai resmi berhasil dipublikasikan ke KHS & Transkrip!" : "Draft nilai berhasil disimpan");
+      handleSelectKelas(selectedKelas);
+    } catch (err: any) {
+      showToast("error", err.message || "Gagal menyimpan nilai");
+    } finally {
+      setSavingNilai(false);
+    }
+  };
 
   const loadKRS = (mahasiswa: MahasiswaAsuhan) => {
     setSelectedMahasiswa(mahasiswa);
@@ -154,7 +260,7 @@ export function DosenWaliPortal({ token }: { token: string }) {
   const pendingKRS = useMemo(() => krsList.filter(k => k.status === "pending"), [krsList]);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl text-sm font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${toast.type === "success" ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>
@@ -188,34 +294,51 @@ export function DosenWaliPortal({ token }: { token: string }) {
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-          Portal Dosen Wali <span className="text-zinc-500 font-normal text-lg">Akademik</span>
+          Portal Dosen <span className="text-zinc-500 font-normal text-lg">Akademik & Perwalian</span>
         </h1>
         <div className="flex items-center gap-2 text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
           <span>›</span>
-          <span className="text-zinc-400">Dosen Wali</span>
-          {view === "persetujuan" && selectedMahasiswa && (
-            <><span>›</span><span className="text-zinc-400">Persetujuan KRS — {selectedMahasiswa.nama_lengkap}</span></>
-          )}
+          <span className="text-zinc-400">Dosen</span>
+          <span>›</span>
+          <span className="text-[#1ea39e]">
+            {view === "dashboard" ? "Dashboard" : view === "persetujuan" ? "Persetujuan KRS" : "Penilaian Kelas"}
+          </span>
         </div>
       </div>
 
       {/* Profil Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-zinc-900/40 border border-white/10 p-5 backdrop-blur-md shadow-xl">
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-xl font-black">
+      <div className="relative overflow-hidden rounded-3xl bg-zinc-900/40 border border-white/10 p-6 backdrop-blur-md shadow-xl">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-5 relative z-10">
+          <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-2xl font-black shrink-0">
             {dosen?.nama_lengkap?.charAt(0)?.toUpperCase() || "D"}
           </div>
           <div>
-            <p className="text-base font-black text-white">{namaLengkap}</p>
-            <p className="text-xs text-zinc-400">NIDN: {dosen?.nidn || "..."} • {dosen?.departemen || "..."}</p>
+            <p className="text-lg font-black text-white">{namaLengkap}</p>
+            <p className="text-xs text-zinc-400 font-mono mt-0.5">NIDN: {dosen?.nidn || "..."} • {dosen?.departemen || "..."}</p>
           </div>
-          <div className="ml-auto flex gap-2">
-            <button onClick={() => setView("dashboard")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${view === "dashboard" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}>Dashboard</button>
-            <button onClick={() => setView("persetujuan")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${view === "persetujuan" ? "bg-[#1ea39e] text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}>Persetujuan KRS</button>
+          <div className="md:ml-auto flex flex-wrap gap-2 pt-2 md:pt-0">
+            <button 
+              onClick={() => setView("dashboard")} 
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${view === "dashboard" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white"}`}
+            >
+              Dashboard
+            </button>
+            <button 
+              onClick={() => setView("persetujuan")} 
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${view === "persetujuan" ? "bg-[#1ea39e] text-white shadow-lg shadow-[#1ea39e]/30" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white"}`}
+            >
+              Persetujuan KRS
+            </button>
+            <button 
+              onClick={() => setView("nilai")} 
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${view === "nilai" ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white"}`}
+            >
+              Input Nilai Kelas
+            </button>
           </div>
         </div>
-        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
       </div>
 
       {/* === DASHBOARD VIEW === */}
@@ -293,54 +416,56 @@ export function DosenWaliPortal({ token }: { token: string }) {
       {/* === PERSETUJUAN VIEW === */}
       {view === "persetujuan" && (
         <div className="space-y-4">
-          {/* Pilih Mahasiswa */}
           {!selectedMahasiswa ? (
             <div className="rounded-2xl bg-zinc-900/40 border border-white/10 overflow-hidden backdrop-blur-md shadow-xl">
               <div className="px-5 py-3 border-b border-white/5 bg-white/5">
                 <h3 className="text-xs font-black text-white uppercase tracking-widest">Pilih Mahasiswa Asuhan</h3>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+              <div className="divide-y divide-white/5">
                 {mahasiswaList.map(m => (
-                  <button key={m.id} onClick={() => loadKRS(m)} className="text-left p-4 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 border border-white/5 hover:border-[#1ea39e]/30 transition-all group">
-                    <p className="text-sm font-bold text-zinc-200 group-hover:text-[#1ea39e]">{m.nama_lengkap}</p>
-                    <p className="text-[10px] text-zinc-500 mt-1">{m.nim} • {m.program_studi}</p>
-                    {m.krs_pending > 0 && (
-                      <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-black">{m.krs_pending} pending</span>
-                    )}
-                  </button>
+                  <div key={m.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
+                    <div>
+                      <p className="font-bold text-sm text-white">{m.nama_lengkap}</p>
+                      <p className="text-xs text-zinc-400 font-mono">NIM: {m.nim} • {m.program_studi} ({m.angkatan})</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {m.krs_pending > 0 && (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-black">
+                          {m.krs_pending} menunggu persetujuan
+                        </span>
+                      )}
+                      <button onClick={() => loadKRS(m)} className="px-3.5 py-1.5 rounded-xl bg-[#1ea39e] hover:bg-[#188f88] text-white text-xs font-bold transition-all">
+                        Periksa KRS
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Action Bar */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <button onClick={() => setSelectedMahasiswa(null)} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-[10px] font-black text-zinc-400 transition-all">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m15 18-6-6 6-6"/></svg>
-                  Ganti Mahasiswa
+              <div className="flex items-center justify-between">
+                <button onClick={() => setSelectedMahasiswa(null)} className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 font-bold transition-all">
+                  ← Kembali ke Daftar Mahasiswa
                 </button>
-                <div className="flex-1 px-4 py-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                  <p className="text-xs font-black text-white">{selectedMahasiswa.nama_lengkap}</p>
-                  <p className="text-[10px] text-zinc-500">{selectedMahasiswa.nim} • {selectedMahasiswa.program_studi}</p>
-                </div>
                 {pendingKRS.length > 0 && (
-                  <button onClick={handleApproveAll} disabled={actionLoading === "all"} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-[10px] font-black text-white transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20">
-                    {actionLoading === "all" ? "Menyetujui..." : `✓ ACC Semua (${pendingKRS.length})`}
+                  <button onClick={handleApproveAll} disabled={actionLoading === "all"} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition-all disabled:opacity-50 shadow-lg shadow-emerald-600/20">
+                    {actionLoading === "all" ? "Memproses..." : `✓ Setujui Semua (${pendingKRS.length} MK)`}
                   </button>
                 )}
               </div>
 
-              {/* KRS Table */}
               <div className="rounded-2xl bg-zinc-900/40 border border-white/10 overflow-hidden backdrop-blur-md shadow-xl">
                 <div className="px-5 py-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Kartu Rencana Studi</h3>
-                  <div className="flex gap-2">
-                    <span className="text-[9px] text-zinc-500">{krsList.length} mata kuliah</span>
-                    {pendingKRS.length > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-black">{pendingKRS.length} pending</span>}
+                  <div>
+                    <h3 className="text-xs font-black text-white uppercase tracking-widest">KRS: {selectedMahasiswa.nama_lengkap}</h3>
+                    <p className="text-[10px] text-zinc-400 font-mono">NIM: {selectedMahasiswa.nim}</p>
                   </div>
+                  <span className="text-[10px] text-zinc-500">{krsList.length} mata kuliah</span>
                 </div>
+
                 {krsList.length === 0 ? (
-                  <div className="p-12 text-center text-zinc-600 italic text-sm">Belum ada KRS untuk mahasiswa ini.</div>
+                  <div className="p-12 text-center text-zinc-500 text-sm italic">Mahasiswa belum mengambil mata kuliah pada semester ini.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -394,6 +519,195 @@ export function DosenWaliPortal({ token }: { token: string }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* === INPUT NILAI KELAS VIEW === */}
+      {view === "nilai" && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Pilih Kelas Bar */}
+          <div className="p-6 rounded-3xl bg-zinc-900/40 border border-white/10 backdrop-blur-md shadow-xl space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Pilih Kelas Perkuliahan
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">Pilih kelas yang Anda ampu untuk menginput atau memperbarui nilai mahasiswa.</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedKelas?.id || ""}
+                  onChange={(e) => {
+                    const found = kelasList.find(k => k.id === e.target.value);
+                    if (found) handleSelectKelas(found);
+                  }}
+                  className="bg-zinc-800 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-zinc-200 focus:outline-none focus:border-amber-500 transition-colors min-w-65"
+                >
+                  {kelasList.map(k => (
+                    <option key={k.id} value={k.id}>
+                      {k.nama_mata_kuliah} ({k.kode_kelas}) — {k.hari}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {selectedKelas && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-white/5 text-xs">
+                <div>
+                  <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block">Mata Kuliah</span>
+                  <p className="font-bold text-zinc-100">{selectedKelas.nama_mata_kuliah}</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block">Kode & SKS</span>
+                  <p className="font-bold text-zinc-100 font-mono">{selectedKelas.kode_kelas} ({selectedKelas.sks} SKS)</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block">Jadwal & Ruang</span>
+                  <p className="font-bold text-zinc-100">{selectedKelas.hari}, {selectedKelas.jam_mulai?.slice(0,5)}–{selectedKelas.jam_selesai?.slice(0,5)} ({selectedKelas.ruangan})</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest block">Formula Penilaian</span>
+                  <p className="font-bold text-amber-400">30% Tugas + 35% UTS + 35% UAS</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Table Input Nilai */}
+          <div className="rounded-3xl bg-zinc-900/40 border border-white/10 overflow-hidden backdrop-blur-md shadow-2xl">
+            <div className="px-6 py-4 border-b border-white/5 bg-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-widest">Daftar Mahasiswa Kelas</h3>
+                <p className="text-[11px] text-zinc-400">{mahasiswaNilaiList.length} mahasiswa terdaftar di kelas ini</p>
+              </div>
+
+              {mahasiswaNilaiList.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleSaveNilai(false)}
+                    disabled={savingNilai}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-black text-zinc-200 transition-all disabled:opacity-50"
+                  >
+                    {savingNilai ? "Menyimpan..." : "Simpan Draft"}
+                  </button>
+                  <button
+                    onClick={() => handleSaveNilai(true)}
+                    disabled={savingNilai}
+                    className="px-5 py-2 rounded-xl bg-linear-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-xs font-black text-white shadow-lg shadow-amber-600/30 transition-all disabled:opacity-50"
+                  >
+                    {savingNilai ? "Mempublikasikan..." : "★ Publikasikan Nilai"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {loadingNilai ? (
+              <div className="py-20 text-center space-y-3">
+                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Memuat daftar peserta kelas...</p>
+              </div>
+            ) : mahasiswaNilaiList.length === 0 ? (
+              <div className="py-16 text-center text-zinc-500">
+                <p className="text-sm font-medium">Belum ada mahasiswa yang mengambil kelas ini atau KRS belum disetujui.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] font-black text-zinc-400 uppercase tracking-widest bg-black/30">
+                      <th className="px-5 py-4 w-12 text-center">No</th>
+                      <th className="px-5 py-4">NIM</th>
+                      <th className="px-5 py-4">Nama Mahasiswa</th>
+                      <th className="px-4 py-4 text-center w-28">Tugas (30%)</th>
+                      <th className="px-4 py-4 text-center w-28">UTS (35%)</th>
+                      <th className="px-4 py-4 text-center w-28">UAS (35%)</th>
+                      <th className="px-4 py-4 text-center">Nilai Akhir</th>
+                      <th className="px-4 py-4 text-center">Huruf</th>
+                      <th className="px-4 py-4 text-center">Bobot</th>
+                      <th className="px-4 py-4 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {mahasiswaNilaiList.map((mhs, idx) => {
+                      const inp = nilaiInputs[mhs.krs_id] || { tugas: 0, uts: 0, uas: 0 };
+                      const preview = hitungNilaiPreview(inp.tugas, inp.uts, inp.uas);
+
+                      return (
+                        <tr key={mhs.krs_id} className="hover:bg-white/5 transition-colors">
+                          <td className="px-5 py-3 text-center text-zinc-500 font-bold">{idx + 1}</td>
+                          <td className="px-5 py-3 font-mono text-xs text-zinc-400 font-bold">{mhs.nim}</td>
+                          <td className="px-5 py-3 font-bold text-zinc-100">{mhs.nama_lengkap}</td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={inp.tugas}
+                              onChange={(e) => handleInputChange(mhs.krs_id, "tugas", e.target.value)}
+                              className="w-20 bg-zinc-800 border border-white/10 rounded-lg px-2.5 py-1 text-center font-mono text-xs font-bold text-zinc-100 focus:outline-none focus:border-amber-500 transition-colors"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={inp.uts}
+                              onChange={(e) => handleInputChange(mhs.krs_id, "uts", e.target.value)}
+                              className="w-20 bg-zinc-800 border border-white/10 rounded-lg px-2.5 py-1 text-center font-mono text-xs font-bold text-zinc-100 focus:outline-none focus:border-amber-500 transition-colors"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={inp.uas}
+                              onChange={(e) => handleInputChange(mhs.krs_id, "uas", e.target.value)}
+                              className="w-20 bg-zinc-800 border border-white/10 rounded-lg px-2.5 py-1 text-center font-mono text-xs font-bold text-zinc-100 focus:outline-none focus:border-amber-500 transition-colors"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono font-bold text-zinc-200">
+                            {preview.akhir.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-center font-black">
+                            <span className={`px-2 py-0.5 rounded text-xs font-black ${
+                              preview.huruf === "A" || preview.huruf === "AB" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
+                              preview.huruf === "B" || preview.huruf === "BC" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" :
+                              preview.huruf === "C" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
+                              "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                            }`}>
+                              {preview.huruf}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono text-zinc-400">
+                            {preview.bobot.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {mhs.status_nilai === "published" ? (
+                              <span className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                Published
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                Draft
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -241,7 +241,7 @@ func main() {
 		r.Post("/api/pesan", pesanHandler.Create)
 	})
 
-	// 10. Route Akademik (KRS)
+	// 10. Route Akademik (KRS, KHS, Transkrip)
 	r.Route("/api/akademik", func(r chi.Router) {
 		r.Use(middleware.Authenticate(os.Getenv("JWT_SECRET"), logger))
 
@@ -250,9 +250,14 @@ func main() {
 		r.Get("/krs", akademikHandler.GetKRS)
 		r.Post("/krs/ambil", akademikHandler.EnrollKelas)
 		r.Delete("/krs/batal/{id}", akademikHandler.DropKelas)
+
+		// Penilaian & Laporan Nilai Resmi
+		r.Get("/khs", akademikHandler.GetKHS)
+		r.Get("/transkrip", akademikHandler.GetTranskrip)
+		r.Get("/semesters", akademikHandler.GetSemesters)
 	})
 
-	// 11. Route Dosen Wali
+	// 11. Route Dosen & Dosen Wali
 	r.Route("/api/dosen", func(r chi.Router) {
 		r.Use(middleware.Authenticate(os.Getenv("JWT_SECRET"), logger))
 		r.Use(middleware.RequireRole(model.RoleDosen))
@@ -264,6 +269,11 @@ func main() {
 		r.Put("/wali/krs/{id}/approve", dosenWaliHandler.ApproveKRS)
 		r.Put("/wali/krs/{id}/reject", dosenWaliHandler.RejectKRS)
 		r.Put("/wali/mahasiswa/{mahasiswaId}/krs/approve-all", dosenWaliHandler.ApproveAllKRS)
+
+		// Penilaian Kelas Dosen Pengajar
+		r.Get("/kelas/{id}/nilai", akademikHandler.GetMahasiswaNilaiByKelas)
+		r.Post("/kelas/nilai", akademikHandler.InputNilaiKelas)
+		r.Post("/kelas/{id}/publish-nilai", akademikHandler.PublishNilaiKelas)
 
 		// Review Mahakarya
 		r.Get("/wali/mahakarya", mahakaryaHandler.GetToReview)

@@ -264,3 +264,126 @@ func hitungMaxSKS(semesterSekarang int, ipsSemesterLalu float64, izinKRS bool) i
 	}
 }
 
+// HitungNilaiAkhirDanHuruf menghitung nilai akhir terbobot (30% Tugas + 35% UTS + 35% UAS) dan konversi ke huruf & bobot
+func HitungNilaiAkhirDanHuruf(tugas, uts, uas float64) (float64, string, float64) {
+	akhir := (0.30 * tugas) + (0.35 * uts) + (0.35 * uas)
+	akhir = math.Round(akhir*100) / 100
+
+	var huruf string
+	var bobot float64
+
+	switch {
+	case akhir >= 85:
+		huruf = "A"
+		bobot = 4.00
+	case akhir >= 75:
+		huruf = "AB"
+		bobot = 3.50
+	case akhir >= 65:
+		huruf = "B"
+		bobot = 3.00
+	case akhir >= 60:
+		huruf = "BC"
+		bobot = 2.50
+	case akhir >= 55:
+		huruf = "C"
+		bobot = 2.00
+	case akhir >= 40:
+		huruf = "D"
+		bobot = 1.00
+	default:
+		huruf = "E"
+		bobot = 0.00
+	}
+
+	return akhir, huruf, bobot
+}
+
+func (s *Service) GetKHS(ctx context.Context, userID uuid.UUID, semesterAkademik string) (*model.KHSResponse, error) {
+	mhs, err := s.mahasiswaRepo.GetByUserID(ctx, userID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get student info: %w", err)
+	}
+
+	if semesterAkademik == "" {
+		_, semesterAkademik, _ = hitungSemester(mhs.Angkatan)
+	}
+
+	return s.repo.GetKHSMahasiswa(ctx, mhs.ID.String(), semesterAkademik)
+}
+
+func (s *Service) GetTranskrip(ctx context.Context, userID uuid.UUID) (*model.TranskripResponse, error) {
+	mhs, err := s.mahasiswaRepo.GetByUserID(ctx, userID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get student info: %w", err)
+	}
+
+	return s.repo.GetTranskripMahasiswa(ctx, mhs.ID.String())
+}
+
+func (s *Service) GetSemesters(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	mhs, err := s.mahasiswaRepo.GetByUserID(ctx, userID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get student info: %w", err)
+	}
+
+	semesters, err := s.repo.GetSemestersMahasiswa(ctx, mhs.ID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	if len(semesters) == 0 {
+		_, currentSem, _ := hitungSemester(mhs.Angkatan)
+		semesters = append(semesters, currentSem)
+	}
+
+	return semesters, nil
+}
+
+func (s *Service) GetMahasiswaNilaiByKelas(ctx context.Context, kelasID string) ([]model.MahasiswaNilaiKelasItem, error) {
+	return s.repo.GetMahasiswaNilaiByKelas(ctx, kelasID)
+}
+
+func (s *Service) InputNilaiKelas(ctx context.Context, req model.InputNilaiRequest) error {
+	statusNilai := "draft"
+	if req.Publish {
+		statusNilai = "published"
+	}
+
+	for _, item := range req.Nilai {
+		akhir, huruf, bobot := HitungNilaiAkhirDanHuruf(item.NilaiTugas, item.NilaiUTS, item.NilaiUAS)
+		err := s.repo.UpdateNilaiKRS(ctx, item.KRSID, item.NilaiTugas, item.NilaiUTS, item.NilaiUAS, akhir, huruf, bobot, statusNilai)
+		if err != nil {
+			return fmt.Errorf("failed to update grade for krs %s: %w", item.KRSID, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) PublishNilaiKelas(ctx context.Context, kelasID string) error {
+	items, err := s.repo.GetMahasiswaNilaiByKelas(ctx, kelasID)
+	if err != nil {
+		return err
+	}
+
+	for _, it := range items {
+		tugas := 0.0
+		uts := 0.0
+		uas := 0.0
+		if it.NilaiTugas != nil {
+			tugas = *it.NilaiTugas
+		}
+		if it.NilaiUTS != nil {
+			uts = *it.NilaiUTS
+		}
+		if it.NilaiUAS != nil {
+			uas = *it.NilaiUAS
+		}
+		akhir, huruf, bobot := HitungNilaiAkhirDanHuruf(tugas, uts, uas)
+		_ = s.repo.UpdateNilaiKRS(ctx, it.KRSID.String(), tugas, uts, uas, akhir, huruf, bobot, "published")
+	}
+
+	return nil
+}
+
