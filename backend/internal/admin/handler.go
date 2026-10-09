@@ -51,20 +51,25 @@ func (h *Handler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateMataKuliah(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		KodeMK   string `json:"kode_mk"`
-		NamaMK   string `json:"nama_mk"`
-		SKS      int    `json:"sks"`
-		Semester int    `json:"semester"`
+		KodeMK       string `json:"kode_mk"`
+		NamaMK       string `json:"nama_mk"`
+		SKS          int    `json:"sks"`
+		Semester     int    `json:"semester"`
+		ProgramStudi string `json:"program_studi"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Format request tidak valid", err.Error())
 		return
 	}
+	if req.ProgramStudi == "" {
+		req.ProgramStudi = "Teknik Informatika"
+	}
 	mk := model.MataKuliah{
-		KodeMK:   req.KodeMK,
-		NamaMK:   req.NamaMK,
-		SKS:      req.SKS,
-		Semester: req.Semester,
+		KodeMK:       req.KodeMK,
+		NamaMK:       req.NamaMK,
+		SKS:          req.SKS,
+		Semester:     req.Semester,
+		ProgramStudi: req.ProgramStudi,
 	}
 	err := h.service.CreateMataKuliah(r.Context(), &mk)
 	if err != nil {
@@ -88,13 +93,15 @@ func (h *Handler) GetAllMataKuliah(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, "Data mata kuliah berhasil diambil", list)
 }
 
-// GetMataKuliahPaginated — GET /api/admin/mata-kuliah/paginated?page=1&limit=20
-// Endpoint baru dengan pagination untuk tabel di halaman admin.
+// GetMataKuliahPaginated — GET /api/admin/mata-kuliah/paginated?page=1&limit=20&prodi=...&search=...
+// Endpoint dengan pagination dan filter prodi/search untuk tabel di halaman admin.
 // Mengembalikan data beserta metadata (total_items, total_pages, page, limit).
 func (h *Handler) GetMataKuliahPaginated(w http.ResponseWriter, r *http.Request) {
 	params := pagination.FromRequest(r)
+	prodi := r.URL.Query().Get("prodi")
+	search := r.URL.Query().Get("search")
 
-	list, total, err := h.service.GetMataKuliahPaginated(r.Context(), params)
+	list, total, err := h.service.GetMataKuliahPaginated(r.Context(), params, prodi, search)
 	if err != nil {
 		h.logger.Error("Failed to get paginated mata kuliah", zap.Error(err))
 		response.Error(w, http.StatusInternalServerError, "Gagal mengambil data mata kuliah", err.Error())
@@ -113,21 +120,26 @@ func (h *Handler) UpdateMataKuliah(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		KodeMK   string `json:"kode_mk"`
-		NamaMK   string `json:"nama_mk"`
-		SKS      int    `json:"sks"`
-		Semester int    `json:"semester"`
+		KodeMK       string `json:"kode_mk"`
+		NamaMK       string `json:"nama_mk"`
+		SKS          int    `json:"sks"`
+		Semester     int    `json:"semester"`
+		ProgramStudi string `json:"program_studi"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Format request tidak valid", err.Error())
 		return
 	}
+	if req.ProgramStudi == "" {
+		req.ProgramStudi = "Teknik Informatika"
+	}
 
 	mk := model.MataKuliah{
-		KodeMK:   req.KodeMK,
-		NamaMK:   req.NamaMK,
-		SKS:      req.SKS,
-		Semester: req.Semester,
+		KodeMK:       req.KodeMK,
+		NamaMK:       req.NamaMK,
+		SKS:          req.SKS,
+		Semester:     req.Semester,
+		ProgramStudi: req.ProgramStudi,
 	}
 
 	err := h.service.UpdateMataKuliah(r.Context(), id, &mk)

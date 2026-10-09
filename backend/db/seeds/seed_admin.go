@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -13,9 +15,7 @@ import (
 
 func main() {
 	// 1. Load .env
-	if err := godotenv.Load("../../.env"); err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	_ = godotenv.Load(".env", "../.env", "../../.env", "backend/.env")
 
 	// 2. Koneksi database
 	dsn := fmt.Sprintf(
