@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"siakad/backend/internal/model"
 	"siakad/backend/pkg/cache"
@@ -144,11 +145,11 @@ func (r *Repository) GetAllMataKuliah(ctx context.Context) ([]model.MataKuliah, 
 	return list, nil
 }
 
-// GetMataKuliahPaginated mengambil mata kuliah dengan pagination.
+// GetMataKuliahPaginated mengambil mata kuliah dengan pagination, filter prodi, dan search.
 // Mengembalikan data beserta total count untuk navigasi halaman.
-func (r *Repository) GetMataKuliahPaginated(ctx context.Context, params pagination.Params) ([]model.MataKuliah, int64, error) {
-	cacheKey := fmt.Sprintf("matkul:page:%d:%d", params.Page, params.Limit)
-	cacheCountKey := "matkul:count"
+func (r *Repository) GetMataKuliahPaginated(ctx context.Context, params pagination.Params, prodi, search string) ([]model.MataKuliah, int64, error) {
+	cacheKey := fmt.Sprintf("matkul:page:%d:%d:%s:%s", params.Page, params.Limit, prodi, search)
+	cacheCountKey := fmt.Sprintf("matkul:count:%s:%s", prodi, search)
 
 	// Cek apakah halaman ini sudah ada di cache
 	var list []model.MataKuliah
@@ -160,22 +161,49 @@ func (r *Repository) GetMataKuliahPaginated(ctx context.Context, params paginati
 		return cachedList.([]model.MataKuliah), cachedCount.(int64), nil
 	}
 
+	whereClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if prodi != "" && prodi != "Semua" {
+		whereClauses = append(whereClauses, fmt.Sprintf("program_studi = $%d", argIdx))
+		args = append(args, prodi)
+		argIdx++
+	}
+
+	if search != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("(kode_mk ILIKE $%d OR nama_mk ILIKE $%d)", argIdx, argIdx))
+		args = append(args, "%"+search+"%")
+		argIdx++
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
 	// Jalankan COUNT dan SELECT secara concurrent dengan goroutine
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM mata_kuliah").Scan(&totalCount)
+		countQuery := "SELECT COUNT(*) FROM mata_kuliah" + whereSQL
+		err := r.db.QueryRow(ctx, countQuery, args...).Scan(&totalCount)
 		return err
 	})
 
 	g.Go(func() error {
-		query := `
+		listArgs := append([]interface{}{}, args...)
+		listArgs = append(listArgs, params.Limit, params.Offset())
+
+		query := fmt.Sprintf(`
 			SELECT id, kode_mk, nama_mk, sks, semester, program_studi, created_at, updated_at
 			FROM mata_kuliah
+			%s
 			ORDER BY semester ASC, kode_mk ASC
-			LIMIT $1 OFFSET $2
-		`
-		rows, err := r.db.Query(ctx, query, params.Limit, params.Offset())
+			LIMIT $%d OFFSET $%d
+		`, whereSQL, argIdx, argIdx+1)
+
+		rows, err := r.db.Query(ctx, query, listArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to query mata kuliah: %w", err)
 		}
@@ -206,11 +234,11 @@ func (r *Repository) GetMataKuliahPaginated(ctx context.Context, params paginati
 func (r *Repository) UpdateMataKuliah(ctx context.Context, id string, mk *model.MataKuliah) error {
 	query := `
 		UPDATE mata_kuliah 
-		SET kode_mk = $1, nama_mk = $2, sks = $3, semester = $4, updated_at = NOW()
-		WHERE id = $5
+		SET kode_mk = $1, nama_mk = $2, sks = $3, semester = $4, program_studi = $5, updated_at = NOW()
+		WHERE id = $6
 		RETURNING updated_at
 	`
-	err := r.db.QueryRow(ctx, query, mk.KodeMK, mk.NamaMK, mk.SKS, mk.Semester, id).Scan(&mk.UpdatedAt)
+	err := r.db.QueryRow(ctx, query, mk.KodeMK, mk.NamaMK, mk.SKS, mk.Semester, mk.ProgramStudi, id).Scan(&mk.UpdatedAt)
 	if err != nil {
 		return database.ParsePgError(err)
 	}

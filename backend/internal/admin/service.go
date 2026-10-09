@@ -51,9 +51,9 @@ func (s *Service) GetAllMataKuliah(ctx context.Context) ([]model.MataKuliah, err
 	return s.repo.GetAllMataKuliah(ctx)
 }
 
-// GetMataKuliahPaginated mengambil data dengan pagination (untuk tabel admin).
-func (s *Service) GetMataKuliahPaginated(ctx context.Context, params pagination.Params) ([]model.MataKuliah, int64, error) {
-	return s.repo.GetMataKuliahPaginated(ctx, params)
+// GetMataKuliahPaginated mengambil data dengan pagination, prodi, dan search (untuk tabel admin).
+func (s *Service) GetMataKuliahPaginated(ctx context.Context, params pagination.Params, prodi, search string) ([]model.MataKuliah, int64, error) {
+	return s.repo.GetMataKuliahPaginated(ctx, params, prodi, search)
 }
 
 func (s *Service) UpdateMataKuliah(ctx context.Context, id string, mk *model.MataKuliah) error {

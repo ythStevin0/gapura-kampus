@@ -223,8 +223,23 @@ export interface PaginatedResult<T> {
   limit: number;
 }
 
-export async function fetchMataKuliahPaginated(page: number = 1, limit: number = 20): Promise<PaginatedResult<MataKuliah>> {
-  const res = await apiFetch(`/api/admin/mata-kuliah/paginated?page=${page}&limit=${limit}`);
+export async function fetchMataKuliahPaginated(
+  page: number = 1,
+  limit: number = 20,
+  prodi?: string,
+  search?: string
+): Promise<PaginatedResult<MataKuliah>> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+  if (prodi && prodi !== "Semua") {
+    params.append("prodi", prodi);
+  }
+  if (search && search.trim() !== "") {
+    params.append("search", search.trim());
+  }
+  const res = await apiFetch(`/api/admin/mata-kuliah/paginated?${params.toString()}`);
   return res.data as PaginatedResult<MataKuliah>;
 }
 
